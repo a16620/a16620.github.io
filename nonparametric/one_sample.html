@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>일표본 위치모수 검정</title>
+            <style>
+                table {
+                    border-collapse: collapse;
+                    margin-bottom: 10px;
+                }
+
+                #frame_ci tr:first-child {
+                    font-weight: bold;
+                    background-color: lightcoral;
+
+                }
+
+                #frame_ci td:first-child {
+                    font-weight: bold;
+                    background-color: lightblue;
+                }
+
+                #frame_ci tr:first-child td:first-child {
+                    background-color: lightslategray !important;
+
+                }
+
+                #frame_ci_sort td:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                #frame_ostat_rank td:first-child {
+                    font-weight: bold;
+                    background-color:lightgreen;
+                }
+
+                td {
+                    text-align: center;
+                    border: solid 1px black;
+                    min-width: 3em;
+                }
+
+                h3, h4 {
+                    margin-bottom: 2px;
+                }
+
+                .div_flex {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .div_flex div {
+                    max-width: 96vw;
+                    overflow: auto;
+                }
+
+                .div_flex hr {
+                    width: 95%;
+                }
+
+                .data-input {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .data-input > input {
+                    width: 99%;
+                    margin-bottom: 5px;
+                }
+
+                .data-input2 {
+                    width: fit-content;
+                }
+
+                .data-input2 > div {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 5px;
+                }
+            </style>
+    </head>
+    <script>
+        const load_ci_transformer = (type)=>{
+            if (type == 'signrank') {
+                return (i,j,numData) => {
+                    if (i <= j) {
+                        return (numData[i-1]+numData[j-1])/2;
+                    } else {
+                        return null;
+                    }
+                }
+            } else if (type == 'sign') {
+                return (i,j,numData) => {
+                    if (i == j) {
+                        return numData[i-1];
+                    } else {
+                        return null;
+                    }
+                }
+            } else {
+                return null;
+            }
+        }
+
+        const load_ts_transformer = (type)=>{
+            if (type == 'signrank') {
+                return (numData) => {
+                    numData = numData.slice().sort((a, b)=>(Math.abs(a) - Math.abs(b)));
+                    return [numData, to_rank(numData.map(Math.abs))];
+                }
+            } else if (type == 'sign') {
+                return (numData) => {
+                    numData = numData.slice().sort(proper_number_sorter);
+                    return [numData, to_rank(numData)];
+                }
+            } else {
+                return null;
+            }
+        }
+
+        const calc_test_statistic = (data, rank, type) => {
+            if (type == 'signrank') {
+                let W = 0;
+                for (let i = 0; i < data.length; i++) {
+                    if (data[i] > 0) {
+                        W += rank[i];
+                    }
+                }
+                return W;
+            } else if (type == 'sign') {
+                let W = 0;
+                for (let i = 0; i < data.length; i++) {
+                    if (data[i] > 0) {
+                        W += 1;
+                    }
+                }
+                return W;
+            } else {
+                return -1;
+            }
+        }
+
+        let std_cdf = (z) => {
+            const dt = 0.001;
+            const C = Math.sqrt(2*Math.PI);
+            let t = 0, sum = 0;
+            while (t < z) {
+                sum += Math.exp(-Math.pow(t,2)/2)*dt;
+                t += dt;
+            }
+            return Math.min(sum/C+0.5, 1);
+        }
+
+        const calc_apprZ_pv = (n, ts, type) => {
+            let variance, expected;
+            if (type == 'signrank') {
+                variance = n*(n+1)*(2*n+1)/24;
+                expected = n*(n+1)/4;
+            } else if (type == 'sign') {
+                variance = n/4;
+                expected = n/2;
+            } else {
+                return null;
+            }
+
+            const std = Math.sqrt(variance);
+            const z_score = (ts-expected)/std;
+            const pvalue = 1-std_cdf(Math.abs(z_score));
+            
+            return [z_score, 2*pvalue];
+        }
+
+        const stat_ci_symbols = {
+            'signrank':'W_ij',
+            'sign': 'X_i'
+        };
+
+        const onClickCalc = ()=>{
+            const data = read_data();
+            const type = test_type.value;
+            make_CI_frame(data, type);
+            make_TS_frame(data, type);
+        }
+
+        const proper_number_sorter = (a,b)=>a-b;
+        const to_rank = (data) => {
+            let data_rank = data.map((_,i) =>i+1);
+
+            let i = 1, mean_begin = 0;
+            for (let i = 1; i < data.length; i++) {
+                if (data[i] != data[i-1]) {
+                    if (mean_begin < i-1) {
+                        const mean_rank = (mean_begin+1+i)/2;
+                        for (let j = mean_begin; j < i; j++) {
+                            data_rank[j] = mean_rank;
+                        }
+                    }
+                    mean_begin = i;
+                }
+            }
+            if (mean_begin < data.length-1) {
+                const mean_rank = (mean_begin+1+data.length)/2;
+                for (let j = mean_begin; j < data.length; j++) {
+                    data_rank[j] = mean_rank;
+                }
+            }
+            return data_rank;
+        }
+
+        const createTdEl = (txtContent, disabled=false) => {
+            let td = document.createElement('td');
+            if (disabled) {
+                td.style.backgroundColor = 'darkgray';
+            }
+            td.textContent = txtContent;
+            return td;
+        }
+    </script>
+    <body>
+        <div class="div_flex">
+            <h3>데이터 입력</h3>
+            <div class="data-input">
+                <input type="text" placeholder="데이터 (공백으로 구분)" id="input_data">
+                <div class="data-input2">
+                    <h4>가설 설정</h4>
+                    <div>
+                        <span>mu0=</span>
+                        <input type="number" value="0" id="input-mu0">
+                    </div>
+                    <div>
+                        <select id="test_type">
+                            <option value="signrank">부호순위검정</option>
+                            <option value="sign">부호검정</option>
+                        </select>
+                        <button onclick="onClickCalc()">계산</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <h3>검정 통계량</h3>
+            <div>
+                <table>
+                    <tbody id="frame_ostat_rank">
+                        <tr><td>데이터</td><td>...</td></tr>
+                        <tr><td>평균 랭크</td><td>...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <p><b>검정 통계량: </b><em id="output_ts">-</em></p>
+                <p><b>정규 근사 양측 p-value: </b><em id="output_pvalue">-</em> <sub>z=<i id="output_zscore">.</i></sub></p>
+            </div>
+            <hr>
+            <h3>구간 추정 계산표</h3>
+            <div>
+                <table>
+                    <tbody id="frame_ci_sort">
+                        <tr><td>i-th</td><td>...</td></tr>
+                        <tr><td>W_ij</td><td>...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <p style="margin: 0 1em 10px 0;"><b>중앙값: </b><em id="output_ci_median">-</em></p>
+            </div>
+            <div>
+                <table>
+                    <tbody id="frame_ci">
+                        <tr>
+                            <td>X_i | X_j</td>
+                            <td>...</td>
+                            <td>...</td>
+                        </tr>
+                        <tr>
+                            <td>...</td>
+                            <td>...</td>
+                            <td>...</td>
+                        </tr>
+                        <tr>
+                            <td>...</td>
+                            <td>...</td>
+                            <td>...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <hr>
+            <div>
+                <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
+            </div>
+        </div>
+        <script>
+            const input_data = document.getElementById('input_data');
+            const input_mu0 = document.getElementById('input-mu0');
+            const test_type = document.getElementById('test_type');
+
+            const frame_ostat = document.getElementById('frame_ostat_rank');
+            const output_TS = document.getElementById('output_ts');
+            const output_pvalue = document.getElementById('output_pvalue');
+            const output_zscore = document.getElementById('output_zscore');
+
+            
+            const frame_ci = document.getElementById('frame_ci');
+            const frame_ci_sort = document.getElementById('frame_ci_sort'); 
+            const output_ci_median = document.getElementById('output_ci_median');
+
+            const read_data = ()=>{
+                const input = input_data.value;
+                if (!input) return [];
+
+                const mu0 = Number(input_mu0.value) || 0;
+                let numData = input.split(' ').map(Number).filter(Boolean).map((x)=>x-mu0);
+                return numData.sort(proper_number_sorter);
+            };
+
+            const make_TS_frame = (numData, stat_type) => {
+                frame_ostat.replaceChildren();
+                const transformer = load_ts_transformer(stat_type);
+
+                
+                const row_sort_data = document.createElement('tr'); row_sort_data.appendChild(createTdEl('데이터'));
+                const row_rank = document.createElement('tr'); row_rank.appendChild(createTdEl('평균 랭크'));
+
+                const [ts_sort, ts_rank] = transformer(numData);
+                const ts = calc_test_statistic(ts_sort, ts_rank, stat_type);
+                for (let i = 0; i < ts_sort.length; i++) {
+                    row_sort_data.appendChild(createTdEl(ts_sort[i], ts_sort[i] <= 0));
+                    row_rank.appendChild(createTdEl(ts_rank[i], ts_sort[i] <= 0));
+                }
+
+                let rows = [row_sort_data, row_rank];
+                const mu0 = Number(input_mu0.value) || 0;
+                if (mu0 != 0) {
+                    const row_raw_sort_data = document.createElement('tr'); row_raw_sort_data.appendChild(createTdEl('원본 데이터'));
+                    for (let i = 0; i < ts_sort.length; i++) {
+                        row_raw_sort_data.appendChild(createTdEl(ts_sort[i]+mu0, ts_sort[i] <= 0));
+                    }
+
+                    rows = [row_raw_sort_data, ...rows];
+                }
+
+                frame_ostat.replaceChildren(...rows);
+                output_TS.innerText = ts;
+
+                const [z_score, pv] = calc_apprZ_pv(numData.length, ts, stat_type);
+                output_zscore.innerText = z_score.toFixed(2);
+                output_pvalue.innerText = pv.toFixed(4);
+            }
+
+            const make_CI_frame = (numData, stat_type) => {
+                frame_ci.replaceChildren();
+                const transformer = load_ci_transformer(stat_type);
+
+                let order_stat_CI = [];
+
+                const header = document.createElement('tr');
+                header.appendChild(createTdEl('X_i | X_j'))
+                for (let i = 0; i < numData.length; i++) {
+                    header.appendChild(createTdEl(numData[i]));
+                }
+                frame_ci.appendChild(header);
+                for (let i = 1; i <= numData.length; i++) { //col
+                    const row = document.createElement('tr');
+                    row.appendChild(createTdEl(numData[i-1]));
+                    for (let j = 1; j <= numData.length; j++) { //row
+                        const t_data = transformer(i, j, numData);
+                        row.appendChild(createTdEl(t_data, t_data == null));
+                        if (t_data != null) {
+                            order_stat_CI.push(t_data);
+                        }
+                    }
+                    frame_ci.appendChild(row);
+                }
+
+                order_stat_CI.sort(proper_number_sorter);
+                
+                let median;
+                const ci_len = order_stat_CI.length;
+                if (ci_len % 2 == 0) {
+                    median = (order_stat_CI[ci_len/2] + order_stat_CI[ci_len/2 -1])/2;
+                    //median = median.toFixed(3);
+                } else {
+                    median = order_stat_CI[(ci_len-1)/2];
+                }
+
+                output_ci_median.innerText = median;
+
+                const os_order = document.createElement('tr'); os_order.appendChild(createTdEl('i-th'));
+                const os_stat = document.createElement('tr'); os_stat.appendChild(createTdEl(stat_ci_symbols[stat_type]));
+                
+                for (let i = 0; i < order_stat_CI.length; i++) {
+                    os_order.appendChild(createTdEl(i+1));
+                    os_stat.appendChild(createTdEl(order_stat_CI[i]));
+                }
+                
+                frame_ci_sort.replaceChildren(os_order, os_stat);
+            }
+        </script>
+    </body>
+</html>

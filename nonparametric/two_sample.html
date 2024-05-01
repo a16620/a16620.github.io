@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>이표본 비모수 검정</title>
+            <style>
+                table {
+                    border-collapse: collapse;
+                    margin-bottom: 10px;
+                }
+
+                td {
+                    text-align: center;
+                    border: solid 1px black;
+                    min-width: 3em;
+                }
+
+                h3, h4 {
+                    margin-top: 1px;
+                    margin-bottom: 2px;
+                }
+
+                .div-flex {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .div-flex > div {
+                    max-width: 96vw;
+                    overflow: auto;
+                }
+
+                .div-flex hr {
+                    width: 95%;
+                }
+
+                .data-input {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .input-group {
+                    display: flex;
+                    width: 100%;
+                    margin-bottom: 5px;
+                }
+
+                .input-group > input {
+                    width: 99%;
+                    margin-left: 5px;
+                }
+
+                .console-manager {
+                    width: 95%;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                .console-manager a {
+                    text-decoration-line: none;
+                    color: palevioletred;
+                }
+
+                .unselectable {
+                    user-select: none;
+                }
+
+                #output_console {
+                    min-height: 500px;
+                    width: 100%;
+                }
+
+                .data-view {
+                    max-width: 96vw;
+                    overflow: auto;
+
+                    display: flex;
+                    justify-content: center;
+                }
+
+                .theme-data td:first-child {
+                    font-weight: bold;
+                    background-color:lightgreen;
+                }
+
+                .theme-ci-chart tr:first-child {
+                    font-weight: bold;
+                    background-color: lightcoral;
+
+                }
+
+                .theme-ci-chart td:first-child {
+                    font-weight: bold;
+                    background-color: lightblue;
+                }
+
+                .theme-ci-chart tr:first-child td:first-child {
+                    background-color: lightslategray !important;
+
+                }
+
+                .theme-ci-sort td:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+            </style>
+            <script>
+                const sort_inc = (a,b)=>a-b;
+                const sort_dec = (a,b)=>b-a;
+
+                const to_rank = (data, mean=true) => {
+                    let data_rank = data.map((_,i) =>i+1);
+        
+                    if (!mean) {
+                        return data_rank;
+                    }
+
+                    let i = 1, mean_begin = 0;
+                    for (let i = 1; i < data.length; i++) {
+                        if (data[i] != data[i-1]) {
+                            if (mean_begin < i-1) {
+                                const mean_rank = (mean_begin+1+i)/2;
+                                for (let j = mean_begin; j < i; j++) {
+                                    data_rank[j] = mean_rank;
+                                }
+                            }
+                            mean_begin = i;
+                        }
+                    }
+                    if (mean_begin < data.length-1) {
+                        const mean_rank = (mean_begin+1+data.length)/2;
+                        for (let j = mean_begin; j < data.length; j++) {
+                            data_rank[j] = mean_rank;
+                        }
+                    }
+                    return data_rank;
+                }
+
+                const to_rank_mixed = (x, y) => {
+                    x = x.map((e)=>[e, 0]);
+                    y = y.map((e)=>[e, 1]);
+                    let data = Array.prototype.concat(x, y);
+                    data.sort((a, b)=>(a[0]-b[0]));
+                    let data_rank = data.map((_,i) =>i+1);
+        
+                    let i = 1, mean_begin = 0;
+                    for (let i = 1; i < data.length; i++) {
+                        if (data[i][0] != data[i-1][0]) {
+                            if (mean_begin < i-1) {
+                                const mean_rank = (mean_begin+1+i)/2;
+                                for (let j = mean_begin; j < i; j++) {
+                                    data_rank[j] = mean_rank;
+                                }
+                            }
+                            mean_begin = i;
+                        }
+                    }
+                    if (mean_begin < data.length-1) {
+                        const mean_rank = (mean_begin+1+data.length)/2;
+                        for (let j = mean_begin; j < data.length; j++) {
+                            data_rank[j] = mean_rank;
+                        }
+                    }
+
+                    let x_rank = {
+                        'data': [],
+                        'rank': []
+                    }, y_rank = {
+                        'data': [],
+                        'rank': []
+                    };
+                    for (let i = 0; i < data.length; i++) {
+                        if (data[i][1] == 0) {
+                            x_rank.data.push(data[i][0]);
+                            x_rank.rank.push(data_rank[i]);
+                        } else {
+                            y_rank.data.push(data[i][0]);
+                            y_rank.rank.push(data_rank[i]);
+                        }
+                    }
+
+                    return [x_rank, y_rank];
+                }
+
+                const to_ranked_mixed_combine = (x, y, mean=true) => {
+                    x = x.map((e)=>[e, 'X']);
+                    y = y.map((e)=>[e, 'Y']);
+
+                    let mixed = Array.prototype.concat(x, y).sort((a,b)=>a[0]-b[0]);
+                    let mixed_data = mixed.map((e)=>e[0]);
+                    let mixed_group = mixed.map((e)=>e[1]);
+                    let rank = to_rank(mixed_data, mean);
+
+                    return {
+                        'group': mixed_group,
+                        'value': mixed_data,
+                        'rank': rank
+                    }
+                }
+
+                const to_score_from_rank = (rank, score_vec) => {
+                    return rank.map((r)=>{
+                        if (Number.isInteger(r)) {
+                            return score_vec[r-1];
+                        } else {
+                            r = Math.floor(r);
+                            return (score_vec[r-1]+score_vec[r])/2;
+                        }
+                    });
+                }
+
+                const median_from_ord = (data) => {
+                    const len = data.length;
+                    let median;
+                    if (len % 2 == 0) {
+                        median = (data[len/2] + data[len/2 -1])/2;
+                    } else {
+                        median = data[(len-1)/2];
+                    }
+                    return median;
+                }
+
+                let std_cdf = (z) => {
+                    const dt = 0.001;
+                    const C = Math.sqrt(2*Math.PI);
+                    let t = 0, sum = 0;
+                    while (t < z) {
+                        sum += Math.exp(-Math.pow(t,2)/2)*dt;
+                        t += dt;
+                    }
+                    return Math.min(sum/C+0.5, 1);
+                }
+
+                const modified_median_wilcox = (x, y) => {
+                    const mx = median_from_ord(wilcox_signedrank_ci(x).ordered.V_i), my = median_from_ord(wilcox_signedrank_ci(y).ordered.V_i);
+                    const dm = my-mx;
+                    return {
+                        'Y':y,
+                        'Y\'':y.map((e)=>e-dm),
+                        'X':x,
+                        'My, Mx': [my, mx]
+                    }
+                }
+
+                const gen_siegel_tukey_score = (N) => {
+                    let i = 0, j = N-1, c = 1, rv = false;
+                    const score = Array(N);
+                    while (i < j) {
+                        if (rv) {
+                            score[j--] = c++;
+                            score[i++] = c++;
+                        } else {
+                            score[i++] = c++;
+                            score[j--] = c++;
+                        }
+                        rv = !rv;
+                    }
+                    if (i == j) {
+                        score[i] = c;
+                    }
+                    return score;
+                }
+
+                const siegel_tukey_test = (x, y) => {
+                    const mix_rank = to_ranked_mixed_combine(x, y, false);
+                    const N = mix_rank.rank.length;
+                    const S_vec = gen_siegel_tukey_score(N);
+                    const score = to_score_from_rank(mix_rank.rank, S_vec);
+
+                    let mean_begin_idx = 0, sum_score = score[0];
+                    for (let i = 1; i < N; i++) {
+                        if (mix_rank.value[i] != mix_rank.value[i-1]) {
+                            if (mean_begin_idx < i-1) {
+                                score.fill(sum_score/(i-mean_begin_idx), mean_begin_idx, i);
+                            }
+                            mean_begin_idx = i;
+                            sum_score = 0;
+                        }
+                        sum_score += score[i];
+                    }
+                    if (mean_begin_idx != N-1) {
+                        score.fill(sum_score/(N-mean_begin_idx), mean_begin_idx, N);
+                    }
+
+                    let T = score.reduce((acc, r, i)=>(acc+((mix_rank.group[i] == 'Y') ? score[i] : 0)), 0);
+
+                    return {
+                        'test_statistic': {
+                            'type': 'none',
+                            'value': T
+                        },
+                        'data_rank': {
+                            '그룹': mix_rank.group,
+                            '값': mix_rank.value,
+                            'S(R)': S_vec,
+                            'S\'(R)': score
+                        }
+                    }
+                }
+
+                const ansari_bradley_test = (x, y) => {
+                    const mix_rank = to_ranked_mixed_combine(x, y);
+                    const N = mix_rank.rank.length;
+
+                    const S_vec = mix_rank.rank.map((r)=>(
+                        (N+1)/2-Math.abs(r-(N+1)/2)
+                    ));
+                    const T = S_vec.reduce((acc, r, i)=>(acc+((mix_rank.group[i] == 'X') ? S_vec[i] : 0)), 0);
+
+                    const n = y.length, m = x.length;
+                    let Z = 0;
+                    if (N % 2 == 0) {
+                        const expected = m*(m+n+2)/4;
+                        const std = Math.sqrt(m*n*(m+n+2)*(m+n-2)/48/(m+n-1));
+                        Z = (T-expected)/std;
+                    } else {
+                        const expected = m*Math.pow(m+n+1, 2)/4/N;
+                        const std = Math.sqrt(m*n*(m+n+1)*(Math.pow(m+n, 2)+3)/48)/N;
+                        Z = (T-expected)/std;
+                    }
+                    
+
+                    return {
+                        'test_statistic': {
+                            'type': 'normal',
+                            'value': T,
+                            'z': Z,
+                            'p': 2*(1-std_cdf(Math.abs(Z)))
+                        },
+                        'data_rank': {
+                            '그룹': mix_rank.group,
+                            '값': mix_rank.value,
+                            '랭크': mix_rank.rank,
+                            'S(R)': S_vec
+                        }
+                    }
+                }
+
+                const wilcox_signedrank_test = (x, mu0=0, remove_mu0=true) => {
+                    let X = x.map((e)=>e-mu0).sort((a, b)=>(Math.abs(a) - Math.abs(b)));
+                    if (remove_mu0) {
+                        X = X.filter((x)=>x!=0);
+                    }
+                    let rankX = to_rank(X.map(Math.abs));
+                    const W = rankX.map((r, i)=>(X[i] > 0) ? r : 0).reduce((S, r) => S + r, 0);
+
+                    const n = X.length;
+                    const expected = n*(n+1)/4;
+                    const std = Math.sqrt(n*(n+1)*(2*n+1)/24);
+                    const Z = (W-expected)/std;
+
+                    return {
+                        'test_statistic': {
+                            'type': 'normal',
+                            'value': W,
+                            'z': Z,
+                            'p': 2*(1-std_cdf(Math.abs(Z)))
+                        },
+                        'data_rank': {
+                            'X': X,
+                            'rank': rankX,
+                        },
+                        'ci_chart': wilcox_signedrank_ci(X)
+                    }
+                }
+
+                const wilcox_signedrank_ci = (X) => {
+                    X = X.toSorted(sort_inc);
+                    let ordered_stat = [];
+                    let df = [['X_i | X_i'].concat(X)];
+
+                    for (let i = 0; i < X.length; i++) {
+                        let row = [X[i]];
+                        for (let j = 0; j < X.length; j++) {
+                            if (i <= j) {
+                                const d = (X[j]+X[i])/2;
+                                row.push(d);
+                                ordered_stat.push(d);
+                            } else {
+                                row.push(null);
+                            }
+                        }
+                        df.push(row);
+                    }
+                    ordered_stat.sort(sort_inc);
+
+                    return {
+                        'ordered': {
+                            'i-th': ordered_stat.map((_,i) =>i+1),
+                            'V_i': ordered_stat
+                        },
+                        'chart': df
+                    }
+                }
+
+                const wilcox_ranksum_ci = (x, y) => {
+                    let X = x.slice().sort(sort_dec);
+                    let Y = y.slice().sort(sort_inc);
+
+                    let ordered_stat = [];
+                    let df = [['X_i | Y_i'].concat(Y)];
+
+                    for (let i = 0; i < X.length; i++) {
+                        let row = [X[i]];
+                        for (let j = 0; j < Y.length; j++) {
+                            const d = Y[j]-X[i];
+                            row.push(d);
+                            ordered_stat.push(d);
+                        }
+                        df.push(row);
+                    }
+                    ordered_stat.sort(sort_inc);
+
+                    return {
+                        'ordered': {
+                            'i-th': ordered_stat.map((_,i) =>i+1),
+                            'V_i': ordered_stat
+                        },
+                        'chart': df
+                    }
+                }
+
+                const wilcox_ranksum_test = (x, y) => {
+                    const [rx, ry] = to_rank_mixed(x, y);
+                    const W = ry.rank.reduce((S, r) => S + r, 0);
+
+                    const n = ry.data.length, m = rx.data.length;
+                    const expected = n*(n+m+1)/2;
+                    const std = Math.sqrt(n*m*(n+m+1)/12);
+                    const Z = (W-expected)/std;
+
+                    return {
+                        'test_statistic': {
+                            'value': W,
+                            'z': Z,
+                            'p': 2*(1-std_cdf(Math.abs(Z)))
+                        },
+                        'data_rank': {
+                            'X': rx.data,
+                            'X rank': rx.rank,
+                            'Y': ry.data,
+                            'Y rank': ry.rank
+                        },
+                        'ci_chart': wilcox_ranksum_ci(x, y)
+                    }
+                }
+            </script>
+    </head>
+    <body>
+        <div class="div-flex">
+            <h3>데이터 입력</h3>
+            <div class="data-input">
+                <div class="input-group">
+                    <b>Y</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_1" value="1 2 3">
+                </div>
+                <div class="input-group">
+                    <b>X</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_2" value="3 4 5">
+                </div>
+                <div>
+                    <div>
+                        <label class="unselectable"><input type="radio" name="test_option" value="ranksum" checked>순위합</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="paired">대응 표본(Y-X)</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="ansari">앤서리-브래들리</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="siegel">시갤-튜키</label>
+                    </div>
+                    <div class="console-manager">
+                        <label class="unselectable"><input type="checkbox" id="chkSwapXY">X,Y 바꿈</label>
+                        <label class="unselectable"><input type="checkbox" id="chkModMed">중앙값 보정(Y'=Y-m<sub>Y-X</sub>)</label>
+                        <button onclick="onClickCalc()">계산</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="console-manager">
+                <h3>출력</h3><a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+            </div>
+            <div id="output_console" class="div-flex">
+            </div>
+            <div>
+                <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
+            </div>
+        </div>
+        <script>
+            const output_console = document.getElementById('output_console');
+
+            const read_data_from = (field_id)=>{
+                const input = document.getElementById(field_id);
+                const value = input.value;
+                if (!value) return [];
+
+                let numData = value.split(' ').filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
+                return numData;
+            };
+            
+            const read_option = ()=> {
+                const chk_swap_xy = document.getElementById('chkSwapXY');
+                const chk_mod_median = document.getElementById('chkModMed');
+                const select_test = Array.from(document.getElementsByName('test_option')).filter((x)=>x.checked).at(0).value;
+
+
+                return {
+                    'swap_xy': chk_swap_xy.checked,
+                    'modified_median': chk_mod_median.checked,
+                    'test_type': select_test
+                };
+            }
+
+            const clear_output = () => {
+                output_console.replaceChildren();
+            }
+
+            const number_expression_limit = 4;
+            const to_string_number_compress = (N, limit=number_expression_limit) => {
+                if (typeof N == 'number' && !Number.isInteger(N)) {
+                    let arr_N = Array.from(N.toFixed(limit));
+                    const end_trim = arr_N.findLastIndex((e)=>e!='0')+1;
+                    N = arr_N.slice(0, end_trim).join('');
+                }
+                return N;
+            }
+
+            const createTEXT = (txt, tag) => {
+                const t = document.createElement(tag);
+                t.innerText = txt;
+                return t;
+            }
+
+            const createTD = (txt, background=null) => {
+                const td = document.createElement('td');
+                td.innerText = to_string_number_compress(txt);
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const convert_ts_table = (ts) => {
+                const type = ts.type || 'normal';
+                if (type == 'normal') {
+                    return {
+                        '검정통계량': [ts.value],
+                        '정규 근사 Z': [ts.z.toFixed(3)],
+                        '정규 근사 양측 p': [ts.p.toFixed(4)]
+                    }
+                } else {
+                    return {
+                        '검정통계량': [ts.value],
+                    }
+                }
+            }
+
+            const create_section = (title, childs) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.textAlign = 'center';
+                const title_h = document.createElement('h3');
+                title_h.innerText = title;
+                wrapper.appendChild(title_h);
+
+                wrapper.append(...childs);
+
+                return wrapper;
+            }
+
+            const color_setter_null_gray = (x)=>((x == null) ? 'darkgray' : null);
+            const color_setter_nsign_gray = (x)=>((x <= 0) ? 'darkgray' : null);
+            const color_setter_groupX = (x)=>((x == 'X') ? 'cornflowerblue' : (x == 'Y') ? 'lightcoral' : null);
+
+            const create_table = (df, theme, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add(theme);
+
+                const table = document.createElement('table');
+                const tbody = document.createElement('tbody');
+
+                if (Array.isArray(df)) {
+                    for (const line of df) {
+                        let row = document.createElement('tr');
+                        for (const x of line) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                } else {
+                    for (const [key, value] of Object.entries(df)) {
+                        let row = document.createElement('tr');
+                        row.appendChild(createTD(key));
+                        for (const x of value) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            }
+
+            const create_section_data_record = (df) => {
+                return create_section('데이터', [create_table(df, 'theme-data')]);
+            }
+
+            const create_section_wilcox_signedrank = (x) => {
+                const test_result = wilcox_signedrank_test(x);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table(test_result.data_rank, 'theme-data', color_setter_nsign_gray));
+                childs.push(create_table(convert_ts_table(test_result.test_statistic), 'theme-ci-sort'));
+                childs.push(createTEXT('구간 추정', 'h4'));
+                childs.push(create_table(test_result.ci_chart.ordered, 'theme-ci-sort'));
+                childs.push(create_table(test_result.ci_chart.chart, 'theme-ci-chart'));
+
+                return create_section('대응 표본 부호 순위 검정', childs);
+            }
+
+            const create_section_wilcox_ranksum = (x, y) => {
+                const test_result = wilcox_ranksum_test(x, y);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table(test_result.data_rank, 'theme-data'));
+                childs.push(create_table(convert_ts_table(test_result.test_statistic), 'theme-ci-sort'));
+                childs.push(createTEXT('구간 추정', 'h4'));
+                childs.push(create_table(test_result.ci_chart.ordered, 'theme-ci-sort'));
+                childs.push(create_table(test_result.ci_chart.chart, 'theme-ci-chart'));
+
+                return create_section('윌콕슨 순위합 검정', childs);
+            }
+
+            
+
+            const create_section_siegel_tukey_test = (x, y) => {
+                const test_result = siegel_tukey_test(x, y);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table(test_result.data_rank, 'theme-data', color_setter_groupX));
+                childs.push(create_table(convert_ts_table(test_result.test_statistic), 'theme-ci-sort'));
+
+                return create_section('시갤-튜키 검정', childs);
+            }
+
+            const create_section_ab_test = (x, y) => {
+                const test_result = ansari_bradley_test(x, y);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table(test_result.data_rank, 'theme-data', color_setter_groupX));
+                childs.push(create_table(convert_ts_table(test_result.test_statistic), 'theme-ci-sort'));
+
+                return create_section('앤서리-브래들리 검정', childs);
+            }
+
+            const onClickCalc = () => {
+                const option = read_option();
+                let y_data = read_data_from('input_data_1');
+                let x_data = read_data_from('input_data_2');
+
+                if (option.swap_xy) {
+                    let temp = x_data;
+                    x_data = y_data;
+                    y_data = temp;
+                }
+
+                let output = [];
+                if (option.modified_median) {
+                    const modified_median_data = modified_median_wilcox(x_data, y_data);
+                    x_data = modified_median_data.X;
+                    y_data = modified_median_data['Y\''];
+                    output.push(create_section_data_record(modified_median_data));
+                } else {
+                    output.push(create_section_data_record({
+                        Y: y_data,
+                        X: x_data
+                    }));
+                }
+                output.push(document.createElement('hr'));
+
+                if (option.test_type == 'ranksum') {
+                    output.push(create_section_wilcox_ranksum(x_data, y_data));
+                } else if (option.test_type == 'paired') {
+                    if (x_data.length != y_data.length) {
+                        output_console.prepend(create_table({
+                            '오류': ['데이터 길이가 다릅니다'],
+                            'Y 길이': [y_data.length],
+                            'X 길이': [x_data.length]
+                        }, 'theme-ci-sort'), document.createElement('hr'));
+                        return;
+                    }
+
+                    let z_data = y_data.map((y, i)=>(y-x_data[i]));
+                    output.push(create_section_wilcox_signedrank(z_data))
+                } else if (option.test_type == 'ansari') {
+                    output.push(create_section_ab_test(x_data, y_data));
+                } else if (option.test_type == 'siegel') {
+                    output.push(create_section_siegel_tukey_test(x_data, y_data));
+                }
+                const end_line = document.createElement('hr');
+                end_line.style.cssText = 'border: 0px; border-top: 3px solid;';
+                output.push(end_line);
+                output_console.prepend(...output);
+            }
+        </script>
+    </body>
+</html>
