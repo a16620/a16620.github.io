@@ -64,6 +64,11 @@
                     color: palevioletred;
                 }
 
+                .erase-control {
+                    display: flex;
+                    flex-direction: row;
+                }
+
                 .unselectable {
                     user-select: none;
                 }
@@ -475,7 +480,11 @@
             </div>
             <hr>
             <div class="console-manager">
-                <h3>출력</h3><a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+                <h3>출력</h3>
+                <div class="erase-control">
+                    <a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+                    <label class="unselectable"><input type="checkbox" id="chkAutoClear" checked>자동 지우기</label>
+                </div>
             </div>
             <div id="output_console" class="div-flex">
             </div>
@@ -660,6 +669,11 @@
             }
 
             const onClickCalc = () => {
+                const chk_auto_clear = document.getElementById('chkAutoClear');
+                if (chk_auto_clear.checked) {
+                    clear_output();
+                }
+
                 const option = read_option();
                 let y_data = read_data_from('input_data_1');
                 let x_data = read_data_from('input_data_2');
