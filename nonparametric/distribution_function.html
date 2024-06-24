@@ -278,15 +278,15 @@
             <h3>데이터 입력</h3>
             <div class="data-input">
                 <div class="input-group">
-                    <b>X</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_1" value="">
+                    <b>X</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_1" value="">
                 </div>
                 <div class="input-group">
-                    <b>Y</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_2" value="" disabled>
+                    <b>Y</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_2" value="" disabled>
                 </div>
                 <div>
                     <div>
-                        <label class="unselectable"><input type="radio" name="test_option" value="kolmogorov" checked>콜모고로프 적합도(한집단)</label>
-                        <label class="unselectable"><input type="radio" name="test_option" value="smirnov">스미르노프 검정(두집단)</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="kolmogorov" checked>콜모고로프 적합도(집단-분포)</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="smirnov">스미르노프 검정(집단-집단)</label>
                     </div>
                     <div class="console-manager">
                         <div id="func-selector" class="unselectable">
