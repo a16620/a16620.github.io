@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>분포 함수법</title>
+            <style>
+                table {
+                    border-collapse: collapse;
+                    margin-bottom: 10px;
+                }
+
+                td {
+                    text-align: center;
+                    border: solid 1px black;
+                    min-width: 3em;
+                }
+
+                h3, h4 {
+                    margin-top: 1px;
+                    margin-bottom: 2px;
+                }
+
+                .div-disabled {
+                    pointer-events: none;
+                    opacity: 0.8;
+                }
+
+                .div-flex {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .div-flex > div {
+                    max-width: 96vw;
+                    overflow: auto;
+                }
+
+                .div-flex hr {
+                    width: 95%;
+                }
+
+                .data-input {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .input-group {
+                    display: flex;
+                    width: 100%;
+                    margin-bottom: 5px;
+                }
+
+                .input-group > input {
+                    width: 99%;
+                    margin-left: 5px;
+                }
+
+                .console-manager {
+                    width: 95%;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                .console-manager a {
+                    text-decoration-line: none;
+                    color: palevioletred;
+                }
+
+                .erase-control {
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .unselectable {
+                    user-select: none;
+                }
+
+                #output_console {
+                    min-height: 500px;
+                    width: 100%;
+                }
+
+                #func-selector {
+                    display: flex;
+                }
+
+                #func-selector select {
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                #param-input {
+                    display: flex;
+                    font-size: small;
+                    width: fit-content;
+                    margin-left: 2px;
+                }
+
+                #param-input input {
+                    width: 20px;
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                .data-view {
+                    max-width: 96vw;
+                    overflow: auto;
+
+                    display: flex;
+                    justify-content: center;
+                }
+
+                .data-frame th {
+                    border: 1px solid;
+                    background-color: lightslategrey;
+                }
+
+                .theme-data td:first-child {
+                    font-weight: bold;
+                    background-color:lightgreen;
+                }
+
+                .theme-data2 td:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                .theme-even-color tbody tr:nth-child(even) {
+                    background-color: whitesmoke;
+                }
+                
+            </style>
+            <script>
+                const sort_inc = (a,b)=>a-b;
+                const sort_dec = (a,b)=>b-a;
+
+                const const_erf = 2/Math.sqrt(Math.PI);;
+                const std_norm_cdf = (X) => {
+                    const end = Math.abs(X)*Math.SQRT1_2, dt = (number_calculate_limit > 3) ? Math.pow(0.1, number_calculate_limit) : 0.001;
+                    let erf = 0, t = 0;
+                    while (t <= end) {
+                        erf += Math.exp(-Math.pow(t,2))*dt;
+                        t += dt;
+                    }
+                    erf *= const_erf*Math.sign(X); 
+                    return 0.5*(1+erf)
+                }
+
+                const to_dist_func = (data, sorted=false) => {
+                    const ordered = sorted ? data : data.toSorted(sort_inc);
+                    const max_rank = ordered.map((_,i) =>i+1);
+
+                    let max_rank_begin = 0;
+                    for (let i = 0; i < data.length-1; i++) {
+                        if (ordered[i] != ordered[i+1]) {
+                            max_rank.fill(i+1, max_rank_begin, i+1);
+                            max_rank_begin = i+1;
+                        }
+                    }
+                    max_rank.fill(ordered.length, max_rank_begin);
+
+                    const N = ordered.length;
+                    return [0].concat(max_rank.map((x)=>x/N));
+                }
+                
+                const generate_dist_func = (dist, param) => {
+                    if (dist == 'uniform') {
+                        const L = param.lower, U = param.upper;
+                        return (X) => {
+                            let v;
+                            if (X < L) {
+                                v = 0;
+                            } else if (X < U) {
+                                v = (X-L)/(U-L);
+                            } else {
+                                v = 1;
+                            }
+                            return v;
+                        }
+                    } else if (dist == 'normal') {
+                        const mean = param.mean, std = Math.sqrt(param.var);
+                        return (X) => {
+                            const xx = (X-mean)/std;
+                            return std_norm_cdf(xx);
+                        }
+                    } else if (dist == 'exp') {
+                        const lambda = param.param;
+                        return (X) => {
+                            return 1-Math.exp(-lambda*X);
+                        }
+                    } else if (dist == 'user') {
+                        return new Function('x', 'return ('+param.cdf+')');
+                    }
+                }
+
+                let number_calculate_limit = 0;
+
+                const kolmogorov = (data, cdf) => {
+                    const index = data.map((_,i)=>i+1), N = data.length;
+                    const X = data.toSorted(sort_inc);
+                    let target_cdf = X.map(cdf), X_cdf = to_dist_func(X, true);
+                    if (number_calculate_limit > 0) {
+                        const hard_cutoff = (n)=>Number(n.toFixed(number_calculate_limit));
+                        target_cdf = target_cdf.map(hard_cutoff);
+                        X_cdf = X_cdf.map(hard_cutoff);
+                    }
+                    const D_m = target_cdf.map((f,i)=>X_cdf[i+1]-f), D_p = target_cdf.map((f,i)=>f-X_cdf[i]);
+                    return {
+                        df: {
+                            'i': index,
+                            'X': X,
+                            'FX':target_cdf,
+                            'Dm':D_m,
+                            'Dp':D_p
+                        }, stat: {
+                            'Dm': Math.max(...D_m),
+                            'Dp': Math.max(...D_p),
+                        }
+                    }
+                };
+
+                const smirnov = (X, Y) => {
+                    const oX = X.toSorted(sort_inc), oY = Y.toSorted(sort_inc);
+                    const fX = to_dist_func(oX, true), gY = to_dist_func(oY, true);
+                    if (number_calculate_limit > 0) {
+                        const hard_cutoff = (n)=>Number(n.toFixed(number_calculate_limit));
+                        fX = fX.map(hard_cutoff);
+                        gY = gY.map(hard_cutoff);
+                    }
+                    let i=0,j=0;
+                    const X_tb = [], Y_tb = [], D_tb = [];
+                    const none_value = null;
+                    while (i < oX.length && j < oY.length) {
+                        if (oX[i] == oY[j]) {
+                            X_tb.push(oX[i++]);
+                            Y_tb.push(oY[j++]);
+                        } else if (oX[i] < oY[j]) {
+                            X_tb.push(oX[i++]);
+                            Y_tb.push(none_value);
+                        } else {
+                            X_tb.push(none_value);
+                            Y_tb.push(oY[j++]);
+                        }
+                        D_tb.push(fX[i]-gY[j]);
+                    }
+
+                    while (i < oX.length) {
+                        X_tb.push(oX[i++]);
+                        Y_tb.push(none_value);
+                        D_tb.push(fX[i]-gY[j]);
+                    }
+
+                    while (j < oY.length) {
+                        X_tb.push(none_value);
+                        Y_tb.push(oY[j++]);
+                        D_tb.push(fX[i]-gY[j]);
+                    }
+
+                    return {
+                        df: {
+                            'X': X_tb,
+                            'Y': Y_tb,
+                            'D':D_tb
+                        },
+                        stat: {
+                            'Dm': Math.max(...D_tb),
+                            'Dp': -Math.min(...D_tb)
+                        }
+                    };
+                };
+            </script>
+    </head>
+    <body>
+        <div class="div-flex">
+            <h3>데이터 입력</h3>
+            <div class="data-input">
+                <div class="input-group">
+                    <b>X</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_1" value="">
+                </div>
+                <div class="input-group">
+                    <b>Y</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_2" value="" disabled>
+                </div>
+                <div>
+                    <div>
+                        <label class="unselectable"><input type="radio" name="test_option" value="kolmogorov" checked>콜모고로프 적합도(한집단)</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="smirnov">스미르노프 검정(두집단)</label>
+                    </div>
+                    <div class="console-manager">
+                        <div id="func-selector" class="unselectable">
+                            분포 함수:
+                            <select id="select_dist_func">
+                                <option value="uniform">Uniform</option>
+                                <option value="normal">Normal</option>
+                                <option value="exp">Exponential</option>
+                                <option value="user">직접입력</option>
+                            </select>
+                            <span>모수: </span>
+                            <div id="param-input">
+
+                            </div>
+                        </div>
+                        <button onclick="onClickCalc()">계산</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="console-manager">
+                <h3>출력</h3>
+                <div class="erase-control">
+                    <a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+                    <label class="unselectable"><input type="checkbox" id="chkAutoClear" checked>자동</label>
+                </div>
+            </div>
+            <div id="output_console" class="div-flex">
+            </div>
+            <div>
+                <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
+            </div>
+        </div>
+        <script>
+            const output_console = document.getElementById('output_console');
+
+            const function_select = document.getElementById('func-selector');
+            const radio_way = document.getElementsByName('test_option');
+            radio_way.forEach((op)=>{
+                op.addEventListener('click', (e)=>{
+                    const input2 = document.getElementById('input_data_2');
+                    if (e.target.value == 'kolmogorov') {
+                        function_select.classList.remove('div-disabled');
+                        input2.disabled = true;
+                    } else {
+                        function_select.classList.add('div-disabled');
+                        input2.disabled = false;
+                    }
+                });
+            });
+
+            const select_dist_func = document.getElementById('select_dist_func');
+            select_dist_func.addEventListener('change', (e)=>{
+                set_param_input(e.target.selectedOptions[0].value);
+            });
+
+            const read_data_from = (field_id)=>{
+                const input = document.getElementById(field_id);
+                const value = String(input.value);
+                if (!value) return [];
+                let spliter = value.includes(',') ? ',' : ' ';
+                let numData = value.split(spliter).filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
+                return numData;
+            };
+            
+            const read_option = ()=> {
+                const select_test = Array.from(document.getElementsByName('test_option')).filter((x)=>x.checked).at(0).value;
+                return {
+                    'test_type': select_test
+                };
+            }
+
+            const clear_output = () => {
+                output_console.replaceChildren();
+            }
+
+            let number_expression_limit = 4;
+            const to_string_number_compress = (N, limit=number_expression_limit) => {
+                if (typeof N == 'number' && !Number.isInteger(N)) {
+                    let arr_N = Array.from(N.toFixed(limit));
+                    const end_trim = arr_N.findLastIndex((e)=>e!='0')+1;
+                    N = arr_N.slice(0, end_trim).join('');
+                }
+                return N;
+            }
+
+            const param_input = document.getElementById('param-input');
+            const set_param_input = (dist) => {
+                if (dist == 'uniform') {
+                    param_input.replaceChildren(create_txt_input('L','lower', '0'), create_txt_input('U','upper', '1'));
+                } else if (dist == 'normal') {
+                    param_input.replaceChildren(create_txt_input('μ','mean', '0'), create_txt_input('σ2','var', '1'));
+                } else if (dist == 'exp') {
+                    param_input.replaceChildren(create_txt_input('λ','param', '1'));
+                } else if (dist == 'user') {
+                    param_input.replaceChildren(create_txt_input('CDF','cdf'));
+                }
+            };
+
+            const load_dist_func = ()=> {
+                const dist = select_dist_func.selectedOptions[0].value;
+                const params = {};
+                if (dist == 'user') {
+                    Array.from(param_input.getElementsByTagName('input')).forEach((p)=>{
+                        params[p.name] = p.value;
+                    });
+                } else {
+                    Array.from(param_input.getElementsByTagName('input')).forEach((p)=>{
+                        params[p.name] = Number(p.value);
+                    });
+                }
+                return generate_dist_func(dist, params);
+            }
+
+            const create_txt_input = (label, name, value='') => {
+                const div = document.createElement('div');
+                div.classList.add('input-group');
+                div.classList.add('input-param');
+
+                const b = document.createElement('b');
+                b.innerText = label;
+                div.appendChild(b);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.name = name;
+                input.value = value;
+                div.appendChild(input);
+
+                return div;
+            }
+
+            const createTEXT = (txt, tag) => {
+                const t = document.createElement(tag);
+                t.innerText = txt;
+                return t;
+            }
+
+            const createTH = (txt, background=null) => {
+                const td = document.createElement('th');
+                td.innerHTML = txt;
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const createTD = (txt, background=null) => {
+                const td = document.createElement('td');
+                td.innerText = to_string_number_compress(txt);
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const convert_ts_table = (ts) => {
+                const type = ts.type || 'normal';
+                if (type == 'normal') {
+                    return {
+                        '검정통계량': [ts.value],
+                        '정규 근사 Z': [ts.z],
+                        '정규 근사 양측 p': [ts.p]
+                    }
+                } else {
+                    return {
+                        '검정통계량': [ts.value],
+                    }
+                }
+            }
+
+            const create_section = (title, childs) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.textAlign = 'center';
+                const title_h = document.createElement('h3');
+                title_h.innerText = title;
+                wrapper.appendChild(title_h);
+
+                wrapper.append(...childs);
+
+                return wrapper;
+            }
+
+            const color_setter_null_gray = (x)=>((x == null) ? 'darkgray' : null);
+            const color_setter_nsign_gray = (x)=>((x <= 0) ? 'darkgray' : null);
+            const color_setter_groupX = (x)=>((x == 'X') ? 'cornflowerblue' : (x == 'Y') ? 'lightcoral' : null);
+
+            const create_dataframe_view = (df, colorder, theme, colnames={}, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add('data-frame');
+                wrapper.classList.add(theme);
+
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                let header = document.createElement('tr');
+                for (const name of colorder) {
+                    const cn = colnames[name] || name;
+                    header.appendChild(createTH(cn));
+                }
+                thead.append(header);
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                const ordered_cols = colorder.map((name)=>df[name]);
+                const max_row = Math.max(...ordered_cols.map((c)=>c.length));
+                for (let row = 0; row < max_row; row++) {
+                    let _row = document.createElement('tr');
+                    for (let col = 0; col < ordered_cols.length; col++) {
+                        if (row < ordered_cols[col].length) {
+                            _row.appendChild(createTD(ordered_cols[col][row], color_setter(ordered_cols[col][row])));
+                        }
+                        else {       
+                            _row.appendChild(createTD(null, color_setter(null)));
+                        }
+                    }
+                    tbody.appendChild(_row);
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            };
+
+            const create_table = (df, theme, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add(theme);
+
+                const table = document.createElement('table');
+                const tbody = document.createElement('tbody');
+
+                if (Array.isArray(df)) {
+                    for (const line of df) {
+                        let row = document.createElement('tr');
+                        for (const x of line) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                } else {
+                    for (const [key, value] of Object.entries(df)) {
+                        let row = document.createElement('tr');
+                        row.appendChild(createTD(key));
+                        for (const x of value) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            }
+
+            const create_section_data_record = (df) => {
+                const len_df = {};
+                for (const data_label in df) {
+                    len_df[data_label] = [df[data_label].length];
+                }
+                return create_section('데이터', [create_table(df, 'theme-data'), createTEXT('길이', 'h4'), create_table(len_df, 'theme-data')]);
+            }
+
+            const create_section_kolmogorov = (x, cdf) => {
+                const test_result = kolmogorov(x, cdf);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량 계산표', 'h4'));
+                childs.push(create_dataframe_view(test_result.df, ['i','X','FX','Dm', 'Dp'], 'theme-even-color', {
+                    'i': '<var>i</var>',
+                    'X': '<var>X<sub>(i)</sub></var>',
+                    'FX':'<var>F<sub>0</sub>(X<sub>(i)</sub>)</var>',
+                    'Dm':'<var>D<sup>-</sup></var>',
+                    'Dp':'<var>D<sup>+</sup></var>',
+                }));
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'D-':[test_result.stat['Dm']],
+                    'D+':[test_result.stat['Dp']],
+                }, 'theme-data2'));
+
+                return create_section('콜모고로프 적합도검정 (Kolmogorov goodness-of-fit test)', childs);
+            }
+
+            const create_section_smirnov = (x, y) => {
+                const test_result = smirnov(x, y);
+
+                let childs = [];
+                childs.push(createTEXT('검정통계량 계산표', 'h4'));
+                childs.push(create_dataframe_view(test_result.df, ['X','Y','D'], 'theme-even-color', {
+                    'X': '<var>X<sub>(i)</sub></var>',
+                    'Y': '<var>Y<sub>(j)</sub></var>',
+                    'D':'<var>F<sub>m</sub>(X<sub>(i)</sub>)-G<sub>n</sub>(Y<sub>(j)</sub>)</var>',
+                }));
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'D-':[test_result.stat['Dm']],
+                    'D+':[test_result.stat['Dp']],
+                }, 'theme-data2'));
+
+                return create_section('스미르노프 검정 (Smirnov test)', childs);
+            }
+
+            const onClickCalc = () => {
+                const chk_auto_clear = document.getElementById('chkAutoClear');
+                if (chk_auto_clear.checked) {
+                    clear_output();
+                }
+
+                const option = read_option();
+                let x_data = read_data_from('input_data_1');
+                let y_data = read_data_from('input_data_2');
+
+                let output = [];
+                if (option.test_type == 'kolmogorov') {
+                    output.push(create_section_data_record({
+                        X: x_data,
+                    }));
+                    output.push(document.createElement('hr'));
+                    const cdf_func = load_dist_func();
+                    output.push(create_section_kolmogorov(x_data, cdf_func));
+                } else if (option.test_type == 'smirnov') {
+                    output.push(create_section_data_record({
+                        X: x_data,
+                        Y: y_data,
+                    }));
+                    output.push(document.createElement('hr'));
+                    output.push(create_section_smirnov(x_data, y_data));
+                }
+                const end_line = document.createElement('hr');
+                end_line.style.cssText = 'border: 0px; border-top: 3px solid;';
+                output.push(end_line);
+                output_console.prepend(...output);
+            }
+
+            set_param_input('uniform');
+        </script>
+    </body>
+</html>
