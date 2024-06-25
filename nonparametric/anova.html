@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>일원/이원배치법</title>
+            <style>
+                table {
+                    border-collapse: collapse;
+                    margin-bottom: 10px;
+                }
+
+                td {
+                    text-align: center;
+                    border: solid 1px black;
+                    min-width: 3em;
+                }
+
+                h3, h4 {
+                    margin-top: 1px;
+                    margin-bottom: 2px;
+                }
+
+                .div-disabled {
+                    pointer-events: none;
+                    opacity: 0.8;
+                }
+
+                .div-flex {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .div-flex > div {
+                    max-width: 96vw;
+                    overflow: auto;
+                }
+
+                .div-flex hr {
+                    width: 95%;
+                }
+
+                .data-input {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .input-group {
+                    display: flex;
+                    width: 100%;
+                    margin-bottom: 5px;
+                }
+
+                .input-group > input {
+                    width: 99%;
+                    margin-left: 5px;
+                }
+
+                .console-manager {
+                    width: 95%;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                .console-manager a {
+                    text-decoration-line: none;
+                    color: palevioletred;
+                }
+
+                .erase-control {
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .unselectable {
+                    user-select: none;
+                }
+
+                .data-input-table {
+                    width: 100%;
+                    text-align: left;
+                    margin-bottom: 2px;
+                }
+
+                .data-input-table td {
+                    border: 0px !important;
+                }
+
+                .data-input-table input {
+                    display: block;
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+
+                .data-input-table tr > *:first-child {
+                    width: 3em;
+                }
+
+                .data-input-table tr > *:first-child input {
+                    text-align: center;
+                }
+
+                .data-input-table tr > *:last-child {
+                    width: 2em;
+                }
+
+                #output_console {
+                    min-height: 500px;
+                    width: 100%;
+                }
+
+                #func-selector {
+                    display: flex;
+                }
+
+                #func-selector select {
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                #param-input {
+                    display: flex;
+                    font-size: small;
+                    width: fit-content;
+                    margin-left: 2px;
+                }
+
+                #param-input input {
+                    width: 20px;
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                .data-view {
+                    max-width: 96vw;
+                    overflow: auto;
+
+                    display: flex;
+                    justify-content: center;
+                }
+
+                .data-frame th {
+                    border: 1px solid;
+                    background-color: lightslategrey;
+                }
+
+                .theme-kruskal table {
+                    border: 1px solid;
+                }
+
+                .theme-kruskal tr *:nth-child(even) {
+                    border-right: 1px solid;
+                    border-left: 1px dashed !important;
+                    font-weight: bold;
+                }
+
+                .theme-kruskal tr *:nth-child(odd) {
+                    border-right: 0px !important;
+                    border-left: 1px solid;
+                }
+
+                .theme-friedman tr {
+                    border-bottom: 2px solid;
+
+                }
+
+                .theme-jonk tr:first-child {
+                background-color: lightslategrey;
+                }
+
+                .theme-data tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightgreen;
+                }
+
+                .theme-data2 tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                .theme-data3 tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                .theme-data3 thead tr *:first-child {
+                    font-weight: bold;
+                    background-color: white !important;
+                }
+
+                .theme-even-color tbody tr:nth-child(even) {
+                    background-color: whitesmoke;
+                }
+                
+            </style>
+            <script>
+                const sort_inc = (a,b)=>a-b;
+                const sort_dec = (a,b)=>b-a;
+
+                let number_calculate_limit = 0;
+                const get_cutoff = () => {
+                    if (number_calculate_limit > 0) {
+                        return (n)=>Number(n.toFixed(number_calculate_limit));
+                    }
+                    return null;
+                }
+                const const_erf = 2/Math.sqrt(Math.PI);;
+
+                const std_norm_cdf = (X) => {
+                    const end = Math.abs(X)*Math.SQRT1_2, dt = (number_calculate_limit > 3) ? Math.pow(0.1, number_calculate_limit) : 0.001;
+                    let erf = 0, t = 0;
+                    while (t <= end) {
+                        erf += Math.exp(-Math.pow(t,2))*dt;
+                        t += dt;
+                    }
+                    erf *= const_erf*Math.sign(X); 
+                    return 0.5*(1+erf)
+                }
+
+                const gamma_igf = (s, x) => {
+                    const end = x, dt = (number_calculate_limit > 3) ? Math.pow(0.1, number_calculate_limit) : 0.001;
+                    let igf = 0, t = 0;
+                    while (t <= end) {
+                        igf += Math.pow(t,s-1)*Math.exp(-t)*dt;
+                        t += dt;
+                    }
+                    return igf;
+                }
+
+                const gamma = (z) => {
+                    return Math.sqrt(2 * Math.PI / z) * Math.pow((1 / Math.E) * (z + 1 / (12 * z - 1 / (10 * z))), z);
+                }
+
+                const chi_sq_cdf = (x, k) => {
+                    return gamma_igf(k/2,x/2)/gamma(k/2);
+                }
+
+                const to_rank = (data, sorted=false) => {
+                    if (sorted) {
+                        const rank = Array(data.length);
+                        let mean_rank_begin = 1, mean_group_sizes = [];
+                        for (let i = 0; i < data.length-1; i++) {
+                            if (data[i] != data[i+1]) {
+                                const mean_rank = (mean_rank_begin+(i+1))/2;
+                                rank.fill(mean_rank, mean_rank_begin-1, i+1);
+                                if (mean_rank_begin < i+1) {
+                                    mean_group_sizes.push(i+2-mean_rank_begin);
+                                }
+                                mean_rank_begin = i+2;
+                            }
+                        }
+                    
+                        const mean_rank = (mean_rank_begin+data.length)/2;
+                        rank.fill(mean_rank, mean_rank_begin-1);
+                        if (mean_rank_begin < data.length) {
+                            mean_group_sizes.push(data.length-mean_rank_begin+1);
+                        }
+                        return [rank, mean_group_sizes];
+                    }
+                
+                    const ordered_data_rank = Array(data.length);
+                    const ordered_data = data.map((e,i)=>[e,i]).sort((a,b)=>a[0]-b[0]); //data,index
+                
+                    let mean_rank_begin = 1, mean_group_sizes = [];
+                    for (let i = 0; i < data.length-1; i++) {
+                        if (ordered_data[i][0] != ordered_data[i+1][0]) {
+                            const mean_rank = (mean_rank_begin+(i+1))/2;
+                            ordered_data_rank.fill(mean_rank, mean_rank_begin-1, i+1);
+                            if (mean_rank_begin < i+1) {
+                                mean_group_sizes.push(i+2-mean_rank_begin);
+                            }
+                            mean_rank_begin = i+2;
+                        }
+                    }
+                    
+                    const mean_rank = (mean_rank_begin+data.length)/2;
+                    ordered_data_rank.fill(mean_rank, mean_rank_begin-1);
+                    if (mean_rank_begin < data.length) {
+                        mean_group_sizes.push(data.length-mean_rank_begin+1);
+                    }
+
+                    const rank = Array(data.length);
+                    ordered_data.forEach((e,i) => {
+                        rank[e[1]] = ordered_data_rank[i];
+                    });
+                
+                    return [rank, mean_group_sizes];
+                }
+
+                const to_rank_grouped = (df) => {              
+                    const N = Object.values(df).reduce((sum, g)=>sum+g.length, 0);
+                    const ordered_data_rank = Array(N);
+                    const mixed_data = Object.entries(df).map(([label, data])=>data.map((e,i)=>[e,label,i])).reduce((ca, g)=>ca.concat(g), []).toSorted((a,b)=>{
+                        return a[0]-b[0];
+                    });
+                    
+                    let mean_rank_begin = 1, mean_group_sizes = [];
+                    for (let i = 0; i < mixed_data.length-1; i++) {
+                        if (mixed_data[i][0] != mixed_data[i+1][0]) {
+                            const mean_rank = (mean_rank_begin+(i+1))/2;
+                            ordered_data_rank.fill(mean_rank, mean_rank_begin-1, i+1);
+                            if (mean_rank_begin < i+1) {
+                                mean_group_sizes.push(i+2-mean_rank_begin);
+                            }
+                            mean_rank_begin = i+2;
+                        }
+                    }
+                    
+                    const mean_rank = (mean_rank_begin+mixed_data.length)/2;
+                    ordered_data_rank.fill(mean_rank, mean_rank_begin-1);
+                    if (mean_rank_begin < mixed_data.length) {
+                        mean_group_sizes.push(mixed_data.length-mean_rank_begin+1);
+                    }
+                
+                    const ranked_df = {};
+                    Object.entries(df).forEach(([label, data])=>{
+                        ranked_df[label] = Array(data.length);
+                    });
+                    mixed_data.forEach((e,i) => {
+                        ranked_df[e[1]][e[2]] = ordered_data_rank[i];
+                    });
+                
+                    return [ranked_df, N, mean_group_sizes];
+                }
+
+                const sum_byGroup = (df)=>{
+                    const rs = {};
+                    Object.entries(df).forEach(([label, data])=>{
+                        const rsum = data.reduce((sum, acc)=>sum+acc, 0);
+                        rs[label] = [rsum, rsum/data.length, data.length];
+                    });
+                    return rs;
+                };
+
+                const kruskal_wallis_test = (df, labels) => {
+                    df = Object.keys(df).filter((key)=>labels.includes(key)).reduce((obj, key)=>{
+                        obj[key] = df[key];
+                        return obj;
+                    }, {});
+                    const [rank_df, N, mean_group_sizes] = to_rank_grouped(df);
+                    const ranksum = sum_byGroup(rank_df);
+
+                    let H, H_adj;
+                    const cutoff = get_cutoff();
+                    if (cutoff) {
+                        H = Object.values(ranksum).reduce((sum, acc)=>{
+                            return sum + cutoff(acc[0]**2 / acc[2]);
+                        }, 0)*12/(N*(N+1))-3*(N+1);
+                        H_adj = (mean_group_sizes.length > 0) ? H/(1-cutoff(mean_group_sizes.reduce((sum, acc)=>sum+acc,0)/(N**3-N))) : null;
+                    } else {
+                        H = Object.values(ranksum).reduce((sum, acc)=>{
+                            return sum + acc[0]**2 / acc[2];
+                        }, 0)*12/(N*(N+1))-3*(N+1);
+                        H_adj = (mean_group_sizes.length > 0) ? H/(1-(mean_group_sizes.reduce((sum, acc)=>sum+acc,0)/(N**3-N))) : null;
+                    }
+
+                    const comb_df = {};
+                    Object.keys(df).forEach((label)=>{
+                        comb_df[label] = df[label];
+                        comb_df[label+'_rank'] = rank_df[label];
+                    });
+                    const degF = Object.keys(ranksum).length-1;
+                    return {
+                        df: comb_df,
+                        stat: {
+                            H: H,
+                            H_adj: H_adj,
+                            N: N,
+                            ranks: ranksum,
+                            chi: {
+                                df: degF,
+                                p: 1-chi_sq_cdf(H_adj || H, degF)
+                            }
+                        }
+                    }
+                }
+
+                const mann_whitney = (U, V) => {
+                    return V.reduce((sum, v)=> {
+                        return sum + U.reduce((s, u)=> {
+                            return s+((v > u) ? 1 : ((v == u) ? 0.5 : 0));
+                        }, 0);
+                    }, 0);
+                }
+
+                const jonckheere = (df, order) => {
+                    df = Object.keys(df).filter((key)=>order.includes(key)).reduce((obj, key)=>{
+                        obj[key] = df[key];
+                        return obj;
+                    }, {});
+
+                    const k = order.length, g_sizes = Object.values(df).map((d)=>d.length), N = g_sizes.reduce((sum, acc)=>sum+acc,0);
+                    let J = 0, U_lab = [], U_val = [];
+                    for (let u = 0; u < k-1; u++) {
+                        for (let v = u+1; v < k; v++) {
+                            const U = mann_whitney(df[order[u]], df[order[v]]);
+                            J += U;
+                            U_lab.push('U'+(u+1).toString()+(v+1).toString());
+                            U_val.push(U);
+                        }
+                    }
+                    const exp = (N**2-g_sizes.reduce((sum, acc)=>sum+acc**2,0))/4, std = Math.sqrt(((2*N+3)*N**2-g_sizes.reduce((sum, acc)=>sum+((2*acc+3)*acc**2),0))/72);
+                    const Z = (J-exp)/std, p = std_norm_cdf(Z);
+                    return {
+                        df: [U_lab, U_val],
+                        stat: {
+                            J: J,
+                            Z: Z,
+                            p: Math.min(p, 1-p)
+                        }
+                    }
+                }
+
+                const to_rank_blocked = (df) => {
+                    const data_len = Object.values(df).map((d)=>d.length), N = data_len[0];
+                    if (data_len.some((n)=>n!=N)) {
+                        return null;
+                    }
+
+                    const keys = Object.keys(df);
+                    const rank_df = keys.reduce((obj,k)=>{
+                        obj[k]=[];
+                        return obj;
+                    }, {});
+                    const mean_group_sizes = [];
+                    for (let i = 0; i < N; i++) {
+                        let [rank_row, cg] = to_rank(keys.map((k)=>df[k][i]));
+                        keys.forEach((k,i)=>rank_df[k].push(rank_row[i]));
+                        if (cg.length > 0) {
+                            mean_group_sizes.push(cg);
+                        }
+                    }
+                    return [rank_df, N, mean_group_sizes];
+                }
+                
+                const friedman_test = (df, labels) => {
+                    df = Object.keys(df).filter((key)=>labels.includes(key)).reduce((obj, key)=>{
+                        obj[key] = df[key];
+                        return obj;
+                    }, {});
+
+                    const [rank_df, n, mean_group_sizes] = to_rank_blocked(df);
+                    const ranksum = sum_byGroup(rank_df);
+                    const k = Object.keys(ranksum).length;
+                    let S = Object.values(ranksum).reduce((sum, acc)=>{
+                        return sum + acc[0]**2;
+                    }, 0)*12/(n*k*(k+1))-3*n*(k+1), S_adj;
+
+                    const cutoff = get_cutoff();
+                    if (cutoff) {
+                        S_adj = (mean_group_sizes.length > 0) ? S/(1-cutoff(mean_group_sizes.reduce((sum, T)=>sum+T.reduce((sum, t)=>sum+(t**3-t),0),0)/(n*k*(k**2-1)))) : null;
+                    } else {
+                        S_adj = (mean_group_sizes.length > 0) ? S/(1-(mean_group_sizes.reduce((sum, T)=>sum+T.reduce((sum, t)=>sum+(t**3-t),0),0)/(n*k*(k**2-1)))) : null;
+                    }
+
+                    const comb_df = {};
+                    Object.keys(df).forEach((label)=>{
+                        comb_df[label] = df[label];
+                        comb_df[label+'_rank'] = rank_df[label];
+                    });
+                    return {
+                        df: comb_df,
+                        stat: {
+                            S: S,
+                            S_adj: S_adj,
+                            N: n,
+                            ranks: ranksum,
+                            chi: {
+                                df: k-1,
+                                p: 1-chi_sq_cdf(S_adj || S, k-1)
+                            }
+                        }
+                    }
+                }
+
+                const page_test = (df, order) => {     
+                    df = Object.keys(df).filter((key)=>order.includes(key)).reduce((obj, key)=>{
+                        obj[key] = df[key];
+                        return obj;
+                    }, {});
+
+                    const [rank_df, n, _] = to_rank_blocked(df);
+                    const ranksum = sum_byGroup(rank_df);
+                    let L = 0, L_lab = [], L_val = [];
+                    for (let i = 0; i < order.length; i++) {
+                        const LL = (i+1)*ranksum[order[i]][0];
+                        L_lab.push('L'+(i+1).toString());
+                        L_val.push(LL);
+                        L += LL;
+                    }
+                    const k = order.length;
+                    const exp = n*k*(k+1)**2/4, std = Math.sqrt(n*(k**3-k)**2/(144*(k-1)));
+                    const Z = (L-exp)/std, p = std_norm_cdf(Z);
+                    return {
+                        df: [L_lab, L_val],
+                        stat: {
+                            L: L,
+                            Z: Z,
+                            p: Math.min(p, 1-p)
+                        }
+                    }
+                }
+            </script>
+    </head>
+    <body>
+        <div class="div-flex">
+            <h3>데이터 입력</h3>
+            <div class="data-input">
+                <table class="data-input-table">
+                    <thead>
+                        <tr>
+                            <th>그룹</th>
+                            <th>데이터</th>
+                            <th>제거</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-records">
+                    </tbody>
+                </table>
+                <div><input type="button" value="추가" onclick="add_new_data_row()"></div>
+                <hr>
+                <div>
+                    <div>
+                        <label class="unselectable"><input type="radio" name="test_option" value="kruskal" checked>크러스칼-월리스(일원배치)</label>
+                        <label class="unselectable"><input type="checkbox" name="test_option2" value="jonckheere" checked>+존키어(순서대립)</label>
+                        <label class="unselectable"><input type="radio" name="test_option" value="friedman">프리드만(이원배치)</label>
+                        <label class="unselectable"><input type="checkbox" name="test_option2" value="page" checked disabled>+페이지(순서대립)</label>
+                    </div>
+                    <div class="console-manager">
+                        <div>
+                            <span>대립가설(순서적용):</span>
+                            <input type="text" id="input-althypo" onchange="update_alt_hypo()">
+                            <button onclick="reset_alt_hypo()">초기화</button>
+                        </div>
+                        <button onclick="onClickCalc()">계산</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="console-manager">
+                <h3>출력</h3>
+                <div class="erase-control">
+                    <a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+                    <label class="unselectable"><input type="checkbox" id="chkAutoClear" checked>자동</label>
+                </div>
+            </div>
+            <div id="output_console" class="div-flex">
+            </div>
+            <div>
+                <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
+            </div>
+        </div>
+        <script>
+            const output_console = document.getElementById('output_console');
+            const data_rocords = document.getElementById('data-table-records');
+            const input_alth = document.getElementById('input-althypo');
+
+            let alt_hypo = [];
+            const update_alt_hypo = () => {
+                alt_hypo = input_alth.value.trim().split(' ').filter((x)=>x.length>0);
+            }
+
+            const sync_alt_hypo = () => {
+                input_alth.value = alt_hypo.join(' ');
+            }
+
+            const reset_alt_hypo = () => {
+                alt_hypo = Array.from(data_rocords.children).map((e)=>e.children[0].children[0].value.trim());
+                sync_alt_hypo();
+            }
+
+            const test_additional = Array.from(document.getElementsByName('test_option2'));
+            const set_additional_input = (test) => {
+                const turnoff = (test == 'kruskal') ? 'page' : 'jonckheere';
+                test_additional.forEach((e)=>{
+                    e.disabled = e.value == turnoff;
+                });
+            };
+
+            const radio_way = document.getElementsByName('test_option');
+            radio_way.forEach((op)=>{
+                op.addEventListener('click', (e)=>{
+                    set_additional_input(e.target.value);
+                });
+            });
+
+            const read_data_from = (raw_data)=>{
+                const value = String(raw_data);
+                if (!value) return [];
+                let spliter = value.includes(',') ? ',' : ' ';
+                let numData = value.split(spliter).filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
+                return numData;
+            };
+            
+            const read_option = ()=> {
+                const select_test = Array.from(document.getElementsByName('test_option')).filter((x)=>x.checked).at(0).value;
+                let additional;
+                if (select_test == 'kruskal') {
+                    additional = Array.from(document.getElementsByName('test_option2')).some((e)=>{
+                        return e.value == 'jonckheere' && e.checked;
+                    }) ? 'jonckheere' : null;
+                } else if (select_test == 'friedman') {
+                    additional = Array.from(document.getElementsByName('test_option2')).some((e)=>{
+                        return e.value == 'page' && e.checked;
+                    }) ? 'page' : null;
+                }
+                return {
+                    'test_type': select_test,
+                    'additional': additional
+                };
+            }
+
+            const clear_output = () => {
+                output_console.replaceChildren();
+            }
+
+            let number_expression_limit = 4;
+            const to_string_number_compress = (N, limit=number_expression_limit) => {
+                if (typeof N == 'number' && !Number.isInteger(N)) {
+                    let arr_N = Array.from(N.toFixed(limit));
+                    const end_trim = arr_N.findLastIndex((e)=>e!='0')+1;
+                    N = arr_N.slice(0, end_trim).join('');
+                }
+                return N;
+            }
+
+            const create_txt_input = (label, name, value='') => {
+                const div = document.createElement('div');
+                div.classList.add('input-group');
+                div.classList.add('input-param');
+
+                const b = document.createElement('b');
+                b.innerText = label;
+                div.appendChild(b);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.name = name;
+                input.value = value;
+                div.appendChild(input);
+
+                return div;
+            }
+
+            const read_data = () => {
+                const data = {}, order = [];
+                Array.from(data_rocords.children).forEach((e)=>{
+                    const group = e.children[0].children[0].value.trim();
+                    const data_raw = e.children[1].children[0].value.trim();
+                    order.push(group);
+                    data[group] = read_data_from(data_raw);
+                });
+                return [data, order];
+            }
+
+            const get_next_record_group_name = () => {
+                const data_len = data_rocords.children.length;
+                if (data_len == 0) {
+                    return 'A';
+                }
+                let name = data_rocords.children[data_len-1].children[0].children[0].value.trimEnd(), name_len = name.length;
+                if (name_len == 0) {
+                    return '1';
+                }
+                const last_code = name.charCodeAt(name_len-1);
+                if (48 <= last_code && last_code <= 57) {
+                    let i = name_len-1;
+                    for (let code = name.charCodeAt(name_len-1); (48 <= code && code <= 57);) {
+                        code = name.charCodeAt(--i);
+                    }
+                    let number_part = name.substring(i+1), name_part = name.substring(0, i+1);
+                    return name_part+(Number(number_part)+1).toString()
+                } else if ((97 <= last_code && last_code <= 122) || (65 <= last_code && last_code <= 90)) {
+                    let last_ch = name.charAt(name_len-1);
+                    if (last_ch == 'Z' || last_ch == 'z') {
+                        name += String.fromCharCode(last_ch.charCodeAt(0)-25);
+                    } else {
+                        name = name.substring(0, name_len-1)+String.fromCharCode(last_ch.charCodeAt(0)+1);
+                    }
+                    return name;
+                }
+                return name+'1';
+            }
+
+            const create_input_table_record = (group) => {
+                const tr = document.createElement('tr');
+
+                let old_value = group;
+
+                let td = document.createElement('td');
+                let input = document.createElement('input');
+                input.type = "text";
+                input.name = "g_name";
+                input.value = group;
+                input.addEventListener('change', (e)=>{
+                    alt_hypo.splice(alt_hypo.indexOf(old_value), 1, e.target.value);
+                    old_value = e.target.value;
+                    sync_alt_hypo();
+                });
+                td.appendChild(input);
+                tr.appendChild(td);
+
+                td = document.createElement('td');
+                input = document.createElement('input');
+                input.type = "text";
+                input.name = "data";
+                input.placeholder = '데이터 (공백 또는 콤마로 구분)';
+                td.appendChild(input);
+                tr.appendChild(td);
+
+                td = document.createElement('td');
+                input = document.createElement('input');
+                input.type = "button";
+                input.value = 'X';
+                input.addEventListener('click', ()=>{
+                    alt_hypo.splice(alt_hypo.indexOf(old_value), 1);
+                    sync_alt_hypo();
+                    tr.remove();
+                });
+                td.appendChild(input);
+                tr.appendChild(td);
+
+                return tr;
+            }
+
+            const add_new_data_row = (name=null)=>{
+                name = name || get_next_record_group_name();
+                const new_row = create_input_table_record(name);
+                input_alth.value += ' '+name;
+                update_alt_hypo();
+                data_rocords.appendChild(new_row);
+            }
+
+            const createTEXT = (txt, tag) => {
+                const t = document.createElement(tag);
+                t.innerText = txt;
+                return t;
+            }
+
+            const createTH = (txt, background=null) => {
+                const td = document.createElement('th');
+                td.innerHTML = txt;
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const createTD = (txt, background=null) => {
+                const td = document.createElement('td');
+                td.innerText = to_string_number_compress(txt);
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const convert_ts_table = (ts) => {
+                const type = ts.type || 'normal';
+                if (type == 'normal') {
+                    return {
+                        '검정통계량': [ts.value],
+                        '정규 근사 Z': [ts.z],
+                        '정규 근사 양측 p': [ts.p]
+                    }
+                } else {
+                    return {
+                        '검정통계량': [ts.value],
+                    }
+                }
+            }
+
+            const create_section = (title, childs) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.textAlign = 'center';
+                const title_h = document.createElement('h3');
+                title_h.innerText = title;
+                wrapper.appendChild(title_h);
+
+                wrapper.append(...childs);
+
+                return wrapper;
+            }
+
+            const color_setter_null_gray = (x)=>((x == null) ? 'darkgray' : null);
+            const color_setter_nsign_gray = (x)=>((x <= 0) ? 'darkgray' : null);
+            const color_setter_groupX = (x)=>((x == 'X') ? 'cornflowerblue' : (x == 'Y') ? 'lightcoral' : null);
+
+            const create_dataframe_view = (df, colorder, theme, {colnames={}, rownames=null}, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add('data-frame');
+                if (theme instanceof Array) {
+                    theme.forEach((thm)=>wrapper.classList.add(thm));
+                } else {
+                    wrapper.classList.add(theme);
+                }
+
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                let header = document.createElement('tr');
+                if (rownames) {
+                    header.appendChild(createTH(null));
+                }
+                for (const name of colorder) {
+                    const cn = (colnames[name] != null) ? colnames[name] : name;
+                    header.appendChild(createTH(cn));
+                }
+                thead.append(header);
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                const ordered_cols = colorder.map((name)=>df[name]);
+                const max_row = Math.max(...ordered_cols.map((c)=>c.length));
+                for (let row = 0; row < max_row; row++) {
+                    let _row = document.createElement('tr');
+                    if (rownames) {
+                        const rname = (row < rownames.length) ? rownames[row] : null;
+                        _row.appendChild(createTH(rname, color_setter(rname)));
+                    }
+                    for (let col = 0; col < ordered_cols.length; col++) { 
+                        if (row < ordered_cols[col].length) {
+                            _row.appendChild(createTD(ordered_cols[col][row], color_setter(ordered_cols[col][row])));
+                        }
+                        else {       
+                            _row.appendChild(createTD(null, color_setter(null)));
+                        }
+                    }
+                    tbody.appendChild(_row);
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            };
+
+            const create_table = (df, theme, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add(theme);
+
+                const table = document.createElement('table');
+                const tbody = document.createElement('tbody');
+
+                if (Array.isArray(df)) {
+                    for (const line of df) {
+                        let row = document.createElement('tr');
+                        for (const x of line) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                } else {
+                    for (const [key, value] of Object.entries(df)) {
+                        let row = document.createElement('tr');
+                        row.appendChild(createTD(key));
+                        for (const x of value) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            }
+
+            const create_section_kruskal = (df, label_order) => {
+                if (label_order == null) {
+                    label_order = Object.keys(df);
+                }
+                const test_result = kruskal_wallis_test(df, label_order);
+
+                let childs = [];
+                childs.push(createTEXT('혼합표본 랭크', 'h4'));
+                const label_with_rank = [], colnames = {};
+                label_order.forEach((l)=>{
+                    label_with_rank.push(l);
+                    const label_rank = l+'_rank';
+                    label_with_rank.push(label_rank);
+                    colnames[label_rank] = '(랭크)';
+                });
+                childs.push(create_dataframe_view(test_result.df, label_with_rank, 'theme-kruskal', {colnames: colnames}));
+                childs.push(create_dataframe_view(test_result.stat.ranks, label_order, 'theme-data3', {rownames: ['랭크 합','평균 랭크', '집단 크기']}));
+
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'H': [test_result.stat.H],
+                    'H\'': [test_result.stat.H_adj || '중복 없음'],
+                    '데이터 크기': [test_result.stat.N]
+                }, 'theme-data2'));
+                childs.push(createTEXT('대표본 근사(chi2)', 'h4'));
+                childs.push(create_table({
+                    'df': [test_result.stat.chi.df],
+                    'p-value': [test_result.stat.chi.p]
+                }, 'theme-data2'));
+
+                return create_section('크러스칼-월리스 검정 (Kruskal-Wallis test)', childs);
+            }
+
+            const create_section_jonckheere = (df, label_order) => {
+                if (label_order == null) {
+                    label_order = Object.keys(df);
+                }
+                const test_result = jonckheere(df, label_order);
+
+                let childs = [];
+                childs.push(createTEXT('맨-휘트니 계산표', 'h4'));
+                childs.push(create_table(test_result.df, 'theme-jonk'));
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'J': [test_result.stat.J],
+                    '정규근사Z': [test_result.stat.Z],
+                    'p-value': [test_result.stat.p]
+                }, 'theme-data2'));
+
+                return create_section('죤키어 검정 (Jonckheere test)', childs);
+            }
+
+            const create_section_friedman = (df, label_order) => {
+                if (label_order == null) {
+                    label_order = Object.keys(df);
+                }
+                const test_result = friedman_test(df, label_order);
+
+                let childs = [];
+                childs.push(createTEXT('블록화 랭크', 'h4'));
+                const label_with_rank = [], colnames = {};
+                label_order.forEach((l)=>{
+                    label_with_rank.push(l);
+                    const label_rank = l+'_rank';
+                    label_with_rank.push(label_rank);
+                    colnames[label_rank] = '(랭크)';
+                });
+                childs.push(create_dataframe_view(test_result.df, label_with_rank, ['theme-kruskal','theme-friedman'], {colnames: colnames}));
+                childs.push(create_dataframe_view(test_result.stat.ranks, label_order, 'theme-data3', {rownames: ['랭크 합','평균 랭크', '집단 크기']}));
+
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'S': [test_result.stat.S],
+                    'S\'': [test_result.stat.S_adj || '중복 없음'],
+                    '집단 크기': [test_result.stat.N]
+                }, 'theme-data2'));
+                childs.push(createTEXT('대표본 근사(chi2)', 'h4'));
+                childs.push(create_table({
+                    'df': [test_result.stat.chi.df],
+                    'p-value': [test_result.stat.chi.p]
+                }, 'theme-data2'));
+
+                return create_section('프리드만 검정 (Friedman test)', childs);
+            }
+
+            const create_section_page = (df, label_order) => {
+                if (label_order == null) {
+                    label_order = Object.keys(df);
+                }
+                const test_result = page_test(df, label_order);
+
+                let childs = [];
+                childs.push(createTEXT('페이지 계산표', 'h4'));
+                childs.push(create_table(test_result.df, 'theme-jonk'));
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'L': [test_result.stat.L],
+                    '정규근사Z': [test_result.stat.Z],
+                    'p-value': [test_result.stat.p]
+                }, 'theme-data2'));
+
+                return create_section('페이지 검정 (Page test)', childs);
+            }
+
+            const onClickCalc = () => {
+                const chk_auto_clear = document.getElementById('chkAutoClear');
+                if (chk_auto_clear.checked) {
+                    clear_output();
+                }
+
+                const option = read_option();
+                let [dataframe, order] = read_data();
+
+                let output = [];
+                if (Object.keys(dataframe).length < 3) {
+                    output.push(createTEXT('3개 이상의 범주가 필요합니다.', 'h4'));
+                } else if (option.test_type == 'kruskal') {
+                    output.push(create_section_kruskal(dataframe, order));
+                    if (option.additional == 'jonckheere') {
+                        output.push(create_section_jonckheere(dataframe, order));
+                    }
+                } else if (option.test_type == 'friedman') {
+                    output.push(create_section_friedman(dataframe, order));
+                    if (option.additional == 'page') {
+                        output.push(create_section_page(dataframe, order));
+                    }
+                }
+                
+                const end_line = document.createElement('hr');
+                end_line.style.cssText = 'border: 0px; border-top: 3px solid;';
+                output.push(end_line);
+                output_console.prepend(...output);
+            }
+
+            add_new_data_row('A');
+            add_new_data_row('B');
+            add_new_data_row('C');
+        </script>
+    </body>
+</html>
