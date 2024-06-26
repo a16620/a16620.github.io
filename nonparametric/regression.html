@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>상관/회귀(단일)</title>
+            <style>
+                .navigator {
+                    height: max-content;
+                    overflow: visible !important;
+                }
+                .navigator a {
+                    text-decoration: none;
+                    border-radius: 5px;
+                    border: 1px solid;
+                    color: black;
+                }
+
+                .navigator a:last-child {
+                    color: cornflowerblue;
+                }
+
+                table {
+                    border-collapse: collapse;
+                    margin-bottom: 10px;
+                }
+
+                td {
+                    text-align: center;
+                    border: solid 1px black;
+                    min-width: 3em;
+                }
+
+                h3, h4 {
+                    margin-top: 1px;
+                    margin-bottom: 2px;
+                }
+
+                .div-disabled {
+                    pointer-events: none;
+                    opacity: 0.8;
+                }
+
+                .div-flex {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .div-flex > div {
+                    max-width: 96vw;
+                    overflow: auto;
+                }
+
+                .div-flex hr {
+                    width: 95%;
+                }
+
+                .data-input {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+
+                .input-group {
+                    display: flex;
+                    width: 100%;
+                    margin-bottom: 5px;
+                }
+
+                .input-group > input {
+                    width: 99%;
+                    margin-left: 5px;
+                }
+
+                .console-manager {
+                    width: 95%;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                .console-manager a {
+                    text-decoration-line: none;
+                    color: palevioletred;
+                }
+
+                .erase-control {
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .unselectable {
+                    user-select: none;
+                }
+
+                .console-control {
+                    width: 400px;
+                }
+
+                #output_console {
+                    min-height: 500px;
+                    width: 100%;
+                }
+
+                #func-selector {
+                    display: flex;
+                }
+
+                #func-selector select {
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                #param-input {
+                    display: flex;
+                    font-size: small;
+                    width: fit-content;
+                    margin-left: 2px;
+                }
+
+                #param-input input {
+                    width: 20px;
+                    margin-left: 2px;
+                    margin-right: 5px;
+                }
+
+                .data-view {
+                    max-width: 96vw;
+                    overflow: auto;
+
+                    display: flex;
+                    justify-content: center;
+                }
+
+                .data-frame th {
+                    border: 1px solid;
+                    background-color: lightslategrey;
+                }
+
+                .data-frame-with-rname tr > *:first-child {
+                    background-color: lightslategrey;
+                }
+
+                .theme-last-sum tbody > tr:last-child {
+                    border-top: 2px solid;
+                }
+
+                .theme-data tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightgreen;
+                }
+
+                .theme-data2 tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                .theme-data3 tr > *:first-child {
+                    font-weight: bold;
+                    background-color:lightsalmon;
+                }
+
+                .theme-data3 thead tr *:first-child {
+                    font-weight: bold;
+                    background-color: white !important;
+                }
+
+                .theme-even-color tbody tr:nth-child(even) {
+                    background-color: whitesmoke;
+                }
+
+                .theme-data-frame-eq-ratio table {
+                    aspect-ratio: 1.7;
+                }
+
+                .theme-data-frame-eq-ratio tr > th:first-child {
+                    min-width: 3em;
+                }
+                
+            </style>
+            <script>
+                const sort_inc = (a,b)=>a-b;
+                const sort_dec = (a,b)=>b-a;
+
+                let number_calculate_limit = 0;
+                const get_cutoff = () => {
+                    if (number_calculate_limit > 0) {
+                        return (n)=>Number(n.toFixed(number_calculate_limit));
+                    }
+                    return null;
+                }
+                const const_erf = 2/Math.sqrt(Math.PI);;
+
+                const std_norm_cdf = (X) => {
+                    const end = Math.abs(X)*Math.SQRT1_2, dt = (number_calculate_limit > 3) ? Math.pow(0.1, number_calculate_limit) : 0.001;
+                    let erf = 0, t = 0;
+                    while (t <= end) {
+                        erf += Math.exp(-Math.pow(t,2))*dt;
+                        t += dt;
+                    }
+                    erf *= const_erf*Math.sign(X); 
+                    return 0.5*(1+erf)
+                }
+
+                const to_rank = (data, sorted=false) => {
+                    if (sorted) {
+                        const rank = Array(data.length);
+                        let mean_rank_begin = 1, mean_group_sizes = [];
+                        for (let i = 0; i < data.length-1; i++) {
+                            if (data[i] != data[i+1]) {
+                                const mean_rank = (mean_rank_begin+(i+1))/2;
+                                rank.fill(mean_rank, mean_rank_begin-1, i+1);
+                                if (mean_rank_begin < i+1) {
+                                    mean_group_sizes.push(i+2-mean_rank_begin);
+                                }
+                                mean_rank_begin = i+2;
+                            }
+                        }
+                    
+                        const mean_rank = (mean_rank_begin+data.length)/2;
+                        rank.fill(mean_rank, mean_rank_begin-1);
+                        if (mean_rank_begin < data.length) {
+                            mean_group_sizes.push(data.length-mean_rank_begin+1);
+                        }
+                        return [rank, mean_group_sizes];
+                    }
+                
+                    const ordered_data_rank = Array(data.length);
+                    const ordered_data = data.map((e,i)=>[e,i]).sort((a,b)=>a[0]-b[0]); //data,index
+                
+                    let mean_rank_begin = 1, mean_group_sizes = [];
+                    for (let i = 0; i < data.length-1; i++) {
+                        if (ordered_data[i][0] != ordered_data[i+1][0]) {
+                            const mean_rank = (mean_rank_begin+(i+1))/2;
+                            ordered_data_rank.fill(mean_rank, mean_rank_begin-1, i+1);
+                            if (mean_rank_begin < i+1) {
+                                mean_group_sizes.push(i+2-mean_rank_begin);
+                            }
+                            mean_rank_begin = i+2;
+                        }
+                    }
+                    
+                    const mean_rank = (mean_rank_begin+data.length)/2;
+                    ordered_data_rank.fill(mean_rank, mean_rank_begin-1);
+                    if (mean_rank_begin < data.length) {
+                        mean_group_sizes.push(data.length-mean_rank_begin+1);
+                    }
+
+                    const rank = Array(data.length);
+                    ordered_data.forEach((e,i) => {
+                        rank[e[1]] = ordered_data_rank[i];
+                    });
+                
+                    return [rank, mean_group_sizes];
+                }
+
+                const order_by = (df, colname) => {
+                    const ord_idx = df[colname].map((e,i)=>[e,i]).sort((a,b)=>a[0]-b[0]).map((e)=>e[1]);
+                    return Object.keys(df).reduce((obj, key)=>{
+                        const data = df[key];
+                        obj[key] = ord_idx.map((i)=>data[i]);
+                        return obj;
+                    }, {});
+                };
+
+                const sum_byGroup = (df)=>{
+                    const rs = {};
+                    Object.entries(df).forEach(([label, data])=>{
+                        const rsum = data.reduce((sum, acc)=>sum+acc, 0);
+                        rs[label] = [rsum, rsum/data.length, data.length];
+                    });
+                    return rs;
+                };
+
+                const mann_whitney = (U, V) => {
+                    return V.reduce((sum, v)=> {
+                        return sum + U.reduce((s, u)=> {
+                            return s+((v > u) ? 1 : ((v == u) ? 0.5 : 0));
+                        }, 0);
+                    }, 0);
+                }
+                
+                const comb = (n, r) => {
+                    let m1 = 1, m2 = 1;
+                    for (let i = 1; i <= r; i++) {
+                        m1 *= (n-i+1);
+                        m2 *= i;
+                    }
+                    return m1/m2;
+                }
+
+                const kendall = (X, Y) => {
+                    const {xx, yy} = order_by({xx:X, yy:Y}, 'xx');
+                    const P = [], Q = [], i_vec = [], N = xx.length;
+                    let sum_p = 0, sum_q = 0;
+                    for (let i = 0; i < N; i++) {
+                        i_vec.push(i+1);
+                        let p = 0, q = 0;
+                        for (let j = i+1; j < N; j++) {
+                            if (yy[i] < yy[j]) {
+                                p++;
+                            } else if (yy[i] > yy[j]) {
+                                q++;
+                            }
+                        }
+                        P.push(p); sum_p += p;
+                        Q.push(q); sum_q += q;
+                    }
+                    P.push(sum_p);
+                    Q.push(sum_q);
+                    i_vec.push('합계');
+                    xx.push(null);
+                    yy.push(null);
+
+                    const K = sum_p-sum_q, tau = 2*K/(N*(N-1));
+                    return {
+                        df: {
+                            i:i_vec,
+                            X:xx,
+                            Y:yy,
+                            p:P,
+                            q:Q
+                        },
+                        stat: {
+                            K:K,
+                            tau:tau
+                        }
+                    };
+                }
+
+                const spearman = (X, Y) => {
+                    const [oX,] = to_rank(X), [oY,] = to_rank(Y), n = X.length;
+                    const rs_i = [];
+                    let rs = 0;
+                    for (let i = 0; i < n; i++) {
+                        const rsi = oX[i]*oY[i];
+                        rs += rsi;
+                        rs_i.push(rsi);
+                    }
+                    rs *= 12/(n*(n**2-1));
+                    rs -= 3*(n+1)/(n-1);
+
+                    return {
+                        df: {
+                            rankX: oX,
+                            rankY: oY,
+                            rs: rs_i
+                        },
+                        stat: {
+                            rs: rs
+                        }
+                    }
+                }
+
+                const Walsh_average = (data) => {
+                    let order_W = [];
+                    for (let j = 0; j < data.lengtth; j++) {
+                        for (let i = 0; i <= j; i++) {
+                            const mean = (data[i]+data[j])/2;
+                            order_W.push(mean);
+                        }
+                    }
+                    order_W.sort(fn_number_sort);
+                    return order_W;
+                };
+                
+                const Walsh_matrix_df = (data) => {
+                    const ordX = data.toSorted(sort_inc);
+                    const col_table = [];
+                    for (let col = 0; col < ordX.length; col++) {
+                        const c = [];
+                        for (let row = 0; row < ordX.length; row++) {
+                            if (row <= col) {
+                                const mean = (data[row]+data[col])/2;
+                                c.push(mean);
+                            } else {
+                                c.push(null);
+                            }
+                        }
+                        col_table.push(c);
+                    }
+                    const data_label = ordX.map((x)=>to_string_number_compress(x,3));
+                    const colnames = data_label.reduce((obj, col, i)=>{
+                        obj[i] = col;
+                        return obj;
+                    }, {});
+                    const df = col_table.reduce((obj, col, i)=>{
+                        obj[i] = col;
+                        return obj;
+                    }, {});
+                    return {
+                        df: df,
+                        colnames: colnames,
+                        rownames: data_label,
+                        flat: col_table.flat().filter((x)=>x!=null).sort(sort_inc)
+                    }
+                }
+                
+                const median = (arr, sorted = false) => {
+                    if (!sorted) {
+                        arr = arr.toSorted(fn_number_sort);
+                    }
+                
+                    const N = arr.length;
+                    if (N % 2 == 0) {
+                        return (arr[N/2]+arr[N/2-1])/2;
+                    }
+                    return arr[(N-1)/2];
+                }
+
+                const sen_estimate = (X, Y) => {
+                    const N = X.length, cutoff = get_cutoff();
+                    let S_ij = [], ij = [];
+                    if (cutoff) {
+                        for (let i = 0; i < N; i++) {
+                            for (let j = i+1; j < N; j++) {
+                                const s = (X[j]-X[i])/(Y[j]-Y[i]);
+                                S_ij.push(cutoff(s));
+                                ij.push((i+1).toString()+','+(j+1).toString());
+                            }
+                        }
+                    } else {
+                        for (let i = 0; i < N; i++) {
+                            for (let j = i+1; j < N; j++) {
+                                const s = (X[j]-X[i])/(Y[j]-Y[i]);
+                                S_ij.push(s);
+                                ij.push((i+1).toString()+','+(j+1).toString());
+                            }
+                        }
+                    }
+                    const S_ij_sort = S_ij.toSorted(sort_inc), beta_sen = median(S_ij_sort, true);
+                    const S_table = {
+                        ij:ij,
+                        S: S_ij,
+                        S_sort: S_ij_sort
+                    };
+                    const Z = Y.map((y,i)=>y-beta_sen*X[i]), Z_walsh = Walsh_matrix_df(Z);
+                    const alpha = median(Z_walsh.flat, true);
+
+                    return {
+                        beta: {
+                            table: S_table,
+                            est: beta_sen
+                        },
+                        alpha: {
+                            table: Z_walsh,
+                            est: alpha
+                        }
+                    }
+                }
+                
+            </script>
+    </head>
+    <body>
+        <div class="div-flex">
+            <h3>데이터 입력</h3>
+            <div class="data-input">
+                <div class="input-group">
+                    <b>X</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_1" value="">
+                </div>
+                <div class="input-group">
+                    <b>Y</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_2" value="">
+                </div>
+                <div>
+                    <div class="console-manager console-control">
+                        <span>회귀추정 β=<input type="number" style="width: 30px;" value="0" id="input_beta"></span>
+                        <label class="unselectable"><input type="checkbox" name="test_option" value="kendall">켄달-타우</label>
+                        <label class="unselectable"><input type="checkbox" name="test_option" value="spearman">스피어만</label>
+                        <button onclick="onClickCalc()">계산</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="console-manager">
+                <h3>출력</h3>
+                <div class="erase-control">
+                    <a class="unselectable" href="#" onclick="clear_output()">지우기</a>
+                    <label class="unselectable"><input type="checkbox" id="chkAutoClear" checked>자동</label>
+                </div>
+            </div>
+            <div id="output_console" class="div-flex">
+            </div>
+            <hr>
+            <div class="navigator">
+                <a href="./one_sample.html">일표본</a>
+                <a href="./two_sample.html">이표본</a>
+                <a href="./distribution_function.html">분포함수법</a>
+                <a href="./anova.html">일원/이원배치법</a>
+                <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
+            </div>
+        </div>
+        <script>
+            const output_console = document.getElementById('output_console');
+
+            const read_data_from = (field_id)=>{
+                const input = document.getElementById(field_id);
+                const value = String(input.value);
+                if (!value) return [];
+                let spliter = value.includes(',') ? ',' : ' ';
+                let numData = value.split(spliter).filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
+                return numData;
+            };
+            
+            const read_option = ()=> {
+                let select_test = Array.from(document.getElementsByName('test_option')).filter((e)=>e.checked).map((e)=>e.value);
+                const input = document.getElementById('input_beta');
+
+                return {
+                    'test_type': select_test,
+                    'beta': Number(input.value)
+                };
+            }
+
+            const clear_output = () => {
+                output_console.replaceChildren();
+            }
+
+            let number_expression_limit = 4;
+            const to_string_number_compress = (N, limit=number_expression_limit) => {
+                if (typeof N == 'number' && !Number.isInteger(N)) {
+                    let arr_N = Array.from(N.toFixed(limit));
+                    const end_trim = arr_N.findLastIndex((e)=>e!='0')+1;
+                    N = arr_N.slice(0, end_trim).join('');
+                }
+                return N;
+            }
+
+            const createTEXT = (txt, tag) => {
+                const t = document.createElement(tag);
+                t.innerText = txt;
+                return t;
+            }
+
+            const createTH = (txt, background=null) => {
+                const td = document.createElement('th');
+                td.innerHTML = txt;
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const createTD = (txt, background=null) => {
+                const td = document.createElement('td');
+                td.innerText = to_string_number_compress(txt);
+                if (background) {
+                    td.style.backgroundColor = background;
+                }
+                return td;
+            }
+
+            const convert_ts_table = (ts) => {
+                const type = ts.type || 'normal';
+                if (type == 'normal') {
+                    return {
+                        '검정통계량': [ts.value],
+                        '정규 근사 Z': [ts.z],
+                        '정규 근사 양측 p': [ts.p]
+                    }
+                } else {
+                    return {
+                        '검정통계량': [ts.value],
+                    }
+                }
+            }
+
+            const create_section = (title, childs) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.textAlign = 'center';
+                const title_h = document.createElement('h3');
+                title_h.innerText = title;
+                wrapper.appendChild(title_h);
+
+                wrapper.append(...childs);
+
+                return wrapper;
+            }
+
+            const create_section_data_record = (df) => {
+                return create_section('데이터', [create_table(df, 'theme-data')]);
+            }
+
+            const color_setter_null_gray = (x)=>((x == null) ? 'darkgray' : null);
+            const color_setter_nsign_gray = (x)=>((x <= 0) ? 'darkgray' : null);
+            const color_setter_groupX = (x)=>((x == 'X') ? 'cornflowerblue' : (x == 'Y') ? 'lightcoral' : null);
+
+            const create_dataframe_view = (df, colorder, theme, {colnames={}, rownames=null}, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                wrapper.classList.add('data-frame');
+                if (theme instanceof Array) {
+                    theme.forEach((thm)=>wrapper.classList.add(thm));
+                } else {
+                    wrapper.classList.add(theme);
+                }
+
+                if (rownames) {
+                    wrapper.classList.add('data-frame-with-rname');
+                }
+
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                let header = document.createElement('tr');
+                if (rownames) {
+                    header.appendChild(createTH(null));
+                }
+                for (const name of colorder) {
+                    const cn = (colnames[name] != null) ? colnames[name] : name;
+                    header.appendChild(createTH(cn));
+                }
+                thead.append(header);
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                const ordered_cols = colorder.map((name)=>df[name]);
+                const max_row = Math.max(...ordered_cols.map((c)=>c.length));
+                for (let row = 0; row < max_row; row++) {
+                    let _row = document.createElement('tr');
+                    if (rownames) {
+                        const rname = (row < rownames.length) ? rownames[row] : null;
+                        _row.appendChild(createTH(rname, color_setter(rname)));
+                    }
+                    for (let col = 0; col < ordered_cols.length; col++) { 
+                        if (row < ordered_cols[col].length) {
+                            _row.appendChild(createTD(ordered_cols[col][row], color_setter(ordered_cols[col][row])));
+                        }
+                        else {       
+                            _row.appendChild(createTD(null, color_setter(null)));
+                        }
+                    }
+                    tbody.appendChild(_row);
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            };
+
+            const create_table = (df, theme, color_setter=color_setter_null_gray) => {
+                if (color_setter == null) {
+                    color_setter = (x)=>null;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('data-view');
+                if (theme instanceof Array) {
+                    theme.forEach((thm)=>wrapper.classList.add(thm));
+                } else {
+                    wrapper.classList.add(theme);
+                }
+
+                const table = document.createElement('table');
+                const tbody = document.createElement('tbody');
+
+                if (Array.isArray(df)) {
+                    for (const line of df) {
+                        let row = document.createElement('tr');
+                        for (const x of line) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                } else {
+                    for (const [key, value] of Object.entries(df)) {
+                        let row = document.createElement('tr');
+                        row.appendChild(createTD(key));
+                        for (const x of value) {
+                            row.appendChild(createTD(x, color_setter(x)));
+                        }
+                        tbody.appendChild(row);
+                    }
+                }
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return wrapper;
+            }
+
+            const create_section_theil = (X, Y, beta) => {
+                let childs = [];
+                
+                const Z = Y.map((y,i)=>y-beta*X[i]);
+                childs.push(create_section('잔차', [create_table({
+                    X:X,
+                    Y:Y,
+                    Z:Z
+                }, ['theme-data', 'theme-last-sum'])]));
+                childs.push(createTEXT('Kendall(X~(Y\'=Z))', 'h4'))
+                childs.push(create_section_kendall(X, Z));
+
+                return create_section('타일 검정', childs);
+            }
+
+            const create_section_sen = (X, Y) => {
+                const est = sen_estimate(X, Y);
+                let childs = [];
+                
+                let child_beta = [];
+                child_beta.push(create_dataframe_view(est.beta.table, ['ij','S', 'S_sort'], [], {
+                    colnames: {
+                        'S':'S<sub>ij</sub>',
+                        'S_sort':'S<sub>(l)</sub>'
+                    }
+                }));
+                child_beta.push(create_table({
+                    'β*':[est.beta.est]
+                }, 'theme-data2'));
+                childs.push(create_section('베타 β*', child_beta));
+
+                let child_alpha = [];
+                child_alpha.push(create_dataframe_view(est.alpha.table.df, est.alpha.table.rownames.map((_,i)=>i), 'theme-data-frame-eq-ratio', {
+                    colnames: est.alpha.table.colnames,
+                    rownames: est.alpha.table.rownames
+                }));
+                child_alpha.push(create_table({
+                    'α*':[est.alpha.est]
+                }, 'theme-data2'));
+                childs.push(create_section('알파 α*', child_alpha));
+                return create_section('Sen 추정', childs);
+            } 
+
+            const create_section_kendall = (X, Y) => {
+                const test_result = kendall(X, Y);
+
+                let childs = [];
+                childs.push(createTEXT('통계량 계산표', 'h4'));
+                childs.push(create_dataframe_view(test_result.df, ['i','X','Y','p','q'], 'theme-last-sum', {
+                    colnames: {
+                        'X':'X<sub>i</sub>',
+                        'Y':'Y<sub>i</sub>',
+                        'p':'i 아래 부합의 개수',
+                        'q':'i 아래 비부합의 개수',
+                    }
+                }));
+
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'K': [test_result.stat.K],
+                    'tau est': [test_result.stat.tau]
+                }, 'theme-data2'));
+
+                return create_section('켄달', childs);
+            }
+
+            const create_section_spearman = (X, Y) => {
+                const test_result = spearman(X, Y);
+
+                let childs = [];
+                childs.push(createTEXT('랭크화 데이터', 'h4'));
+                childs.push(create_table({
+                    'X': test_result.df.rankX,
+                    'Y': test_result.df.rankY,
+                    '곱': test_result.df.rs
+                }, ['theme-data2', 'theme-last-sum']));
+
+                childs.push(createTEXT('검정통계량', 'h4'));
+                childs.push(create_table({
+                    'R': [test_result.stat.rs],
+                }, 'theme-data2'));
+
+                return create_section('스피어만', childs);
+            }
+
+            const onClickCalc = () => {
+                const chk_auto_clear = document.getElementById('chkAutoClear');
+                if (chk_auto_clear.checked) {
+                    clear_output();
+                }
+
+                const option = read_option();
+                let x_data = read_data_from('input_data_1');
+                let y_data = read_data_from('input_data_2');
+
+                let output = [];
+                output.push(create_section_data_record({
+                    X: x_data,
+                    Y: y_data
+                }));
+                output.push(document.createElement('hr'));
+
+                output.push(create_section_theil(x_data, y_data, option.beta));
+                output.push(document.createElement('hr'));
+                output.push(create_section_sen(x_data, y_data));
+
+                if (option.test_type.includes('kendall')) {
+                    output.push(document.createElement('hr'));
+                    output.push(create_section_kendall(x_data, y_data));
+                }
+                if (option.test_type.includes('spearman')) {
+                    output.push(document.createElement('hr'));
+                    output.push(create_section_spearman(x_data, y_data));
+                }
+                
+                const end_line = document.createElement('hr');
+                end_line.style.cssText = 'border: 0px; border-top: 3px solid;';
+                output.push(end_line);
+                output_console.prepend(...output);
+            }
+        </script>
+    </body>
+</html>

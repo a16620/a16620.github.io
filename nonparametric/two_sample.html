@@ -4,6 +4,19 @@
         <meta charset="utf-8">
         <title>이표본 비모수 검정</title>
             <style>
+                .navigator {
+                    height: max-content;
+                    overflow: visible !important;
+                }
+                .navigator a {
+                    text-decoration: none;
+                    border-radius: 5px;
+                    border: 1px solid;
+                    color: black;
+                }
+                .navigator a:last-child {
+                    color: cornflowerblue;
+                }
                 table {
                     border-collapse: collapse;
                     margin-bottom: 10px;
@@ -459,10 +472,10 @@
             <h3>데이터 입력</h3>
             <div class="data-input">
                 <div class="input-group">
-                    <b>Y</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_1" value="1 2 3">
+                    <b>Y</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_1" value="">
                 </div>
                 <div class="input-group">
-                    <b>X</b><input type="text" placeholder="데이터 (공백으로 구분)" id="input_data_2" value="3 4 5">
+                    <b>X</b><input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data_2" value="">
                 </div>
                 <div>
                     <div>
@@ -488,7 +501,11 @@
             </div>
             <div id="output_console" class="div-flex">
             </div>
-            <div>
+            <div class="navigator">
+                <a href="./one_sample.html">일표본</a>
+                <a href="./distribution_function.html">분포함수법</a>
+                <a href="./anova.html">일원/이원배치법</a>
+                <a href="./regression.html">상관/회귀(단일)</a>
                 <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
             </div>
         </div>
@@ -500,7 +517,8 @@
                 const value = input.value;
                 if (!value) return [];
 
-                let numData = value.split(' ').filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
+                let spliter = value.includes(',') ? ',' : ' ';
+                let numData = value.split(spliter).filter((x)=>x.length > 0).map(Number).filter((x)=>!Number.isNaN(x));
                 return numData;
             };
             

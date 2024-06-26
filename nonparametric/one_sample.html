@@ -4,6 +4,19 @@
         <meta charset="utf-8">
         <title>일표본 위치모수 검정</title>
             <style>
+                .navigator {
+                    height: max-content;
+                    overflow: visible !important;
+                }
+                .navigator a {
+                    text-decoration: none;
+                    border-radius: 5px;
+                    border: 1px solid;
+                    color: black;
+                }
+                .navigator a:last-child {
+                    color: cornflowerblue;
+                }
                 table {
                     border-collapse: collapse;
                     margin-bottom: 10px;
@@ -224,7 +237,7 @@
         <div class="div_flex">
             <h3>데이터 입력</h3>
             <div class="data-input">
-                <input type="text" placeholder="데이터 (공백으로 구분)" id="input_data">
+                <input type="text" placeholder="데이터 (공백 또는 콤마로 구분)" id="input_data">
                 <div class="data-input2">
                     <h4>가설 설정</h4>
                     <div>
@@ -289,7 +302,11 @@
                 </table>
             </div>
             <hr>
-            <div>
+            <div class="navigator">
+                <a href="./two_sample.html">이표본</a>
+                <a href="./distribution_function.html">분포함수법</a>
+                <a href="./anova.html">일원/이원배치법</a>
+                <a href="./regression.html">상관/회귀(단일)</a>
                 <a href="https://blog.naver.com/a16620" target="_blank">개발자</a>
             </div>
         </div>
@@ -313,7 +330,8 @@
                 if (!input) return [];
 
                 const mu0 = Number(input_mu0.value) || 0;
-                let numData = input.split(' ').map(Number).filter(Boolean).map((x)=>x-mu0);
+                let spliter = input.includes(',') ? ',' : ' ';
+                let numData = input.split(' ').map(Number).filter((x)=>!Number.isNaN(x)).map((x)=>x-mu0);
                 return numData.sort(proper_number_sorter);
             };
 
